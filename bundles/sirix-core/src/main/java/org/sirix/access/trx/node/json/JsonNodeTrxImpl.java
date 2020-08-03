@@ -378,22 +378,6 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   }
 
   @Override
-  public JsonNodeTrx insertSubtreeAsRightSibling(final JsonReader reader) {
-    return insertSubtree(reader, InsertPosition.AS_RIGHT_SIBLING, Commit.Implicit, CheckParentNode.Yes);
-  }
-
-  @Override
-  public JsonNodeTrx insertSubtreeAsRightSibling(final JsonReader reader, Commit commit) {
-    return insertSubtree(reader, InsertPosition.AS_RIGHT_SIBLING, commit, CheckParentNode.Yes);
-  }
-
-  @Override
-  public JsonNodeTrx insertSubtreeAsRightSibling(final JsonReader reader, Commit commit,
-      CheckParentNode checkParentNode) {
-    return insertSubtree(reader, InsertPosition.AS_RIGHT_SIBLING, commit, checkParentNode);
-  }
-
-  @Override
   public JsonNodeTrx insertSubtreeAsLeftSibling(final JsonReader reader) {
     return insertSubtree(reader, InsertPosition.AS_LEFT_SIBLING, Commit.Implicit, CheckParentNode.Yes);
   }
@@ -407,6 +391,22 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   public JsonNodeTrx insertSubtreeAsLeftSibling(final JsonReader reader, Commit commit,
       CheckParentNode checkParentNode) {
     return insertSubtree(reader, InsertPosition.AS_LEFT_SIBLING, commit, checkParentNode);
+  }
+
+  @Override
+  public JsonNodeTrx insertSubtreeAsRightSibling(final JsonReader reader) {
+    return insertSubtree(reader, InsertPosition.AS_RIGHT_SIBLING, Commit.Implicit, CheckParentNode.Yes);
+  }
+
+  @Override
+  public JsonNodeTrx insertSubtreeAsRightSibling(final JsonReader reader, Commit commit) {
+    return insertSubtree(reader, InsertPosition.AS_RIGHT_SIBLING, commit, CheckParentNode.Yes);
+  }
+
+  @Override
+  public JsonNodeTrx insertSubtreeAsRightSibling(final JsonReader reader, Commit commit,
+      CheckParentNode checkParentNode) {
+    return insertSubtree(reader, InsertPosition.AS_RIGHT_SIBLING, commit, checkParentNode);
   }
 
   private JsonNodeTrx insertSubtree(final JsonReader reader, final InsertPosition insertionPosition, Commit commit,
@@ -465,7 +465,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
             default:
           }
         }
-        case AS_RIGHT_SIBLING -> {
+        case AS_LEFT_SIBLING -> {
           if (checkParentNode == CheckParentNode.Yes) {
             final NodeKind parentKind = getParentKind();
             if (parentKind != NodeKind.ARRAY) {
@@ -473,7 +473,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
             }
           }
         }
-        case AS_LEFT_SIBLING -> {
+        case AS_RIGHT_SIBLING -> {
           if (checkParentNode == CheckParentNode.Yes) {
             final NodeKind parentKind = getParentKind();
             if (parentKind != NodeKind.ARRAY) {
@@ -508,11 +508,11 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
         case AS_LAST_CHILD:
           moveToLastChild();
           break;  
-        case AS_RIGHT_SIBLING:
-          moveToRightSibling();
-          break;
         case AS_LEFT_SIBLING:
           moveToLeftSibling();
+          break;
+        case AS_RIGHT_SIBLING:
+          moveToRightSibling();
           break;
         default:
           // May not happen.
@@ -605,9 +605,9 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       final StructNode structNode = nodeReadOnlyTrx.getStructuralNode();
 
       final long parentKey = structNode.getNodeKey();
-      final long rightSibKey = Fixed.NULL_NODE_KEY.getStandardProperty();
       final long leftSibKey =
-          kind == NodeKind.OBJECT_KEY ? Fixed.NULL_NODE_KEY.getStandardProperty() : structNode.getFirstChildKey();
+          kind == NodeKind.OBJECT_KEY ? Fixed.NULL_NODE_KEY.getStandardProperty() : structNode.getLastChildKey();
+      final long rightSibKey = Fixed.NULL_NODE_KEY.getStandardProperty();
 
       final SirixDeweyID id = structNode.getKind() == NodeKind.OBJECT_KEY
           ? deweyIDManager.newRecordValueID()
@@ -618,40 +618,6 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       adaptNodesAndHashesForInsertAsChild(node);
 
       if (getParentKind() != NodeKind.OBJECT_KEY && !nodeHashing.isBulkInsert()) {
-        adaptUpdateOperationsForInsert(id, node.getNodeKey());
-      }
-
-      return this;
-    } finally {
-      unLockIfNecessary();
-    }
-  }
-
-  @Override
-  public JsonNodeTrx insertObjectAsRightSibling() {
-    acquireLockIfNecessary();
-    try {
-      checkAccessAndCommit();
-
-      if (!nodeHashing.isBulkInsert()) {
-        if (getParentKind() != NodeKind.ARRAY) {
-          throw new SirixUsageException("Insert is not allowed if parent node is not an array node!");
-        }
-      }
-
-      final StructNode currentNode = nodeReadOnlyTrx.getStructuralNode();
-
-      final long parentKey = currentNode.getParentKey();
-      final long leftSibKey = currentNode.getNodeKey();
-      final long rightSibKey = currentNode.getRightSiblingKey();
-
-      final SirixDeweyID id = deweyIDManager.newRightSiblingID();
-
-      final ObjectNode node = nodeFactory.createJsonObjectNode(parentKey, leftSibKey, rightSibKey, id);
-
-      insertAsSibling(node);
-
-      if (!nodeHashing.isBulkInsert()) {
         adaptUpdateOperationsForInsert(id, node.getNodeKey());
       }
 
@@ -680,6 +646,40 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       final long rightSibKey = currentNode.getNodeKey();
 
       final SirixDeweyID id = deweyIDManager.newLeftSiblingID();
+
+      final ObjectNode node = nodeFactory.createJsonObjectNode(parentKey, leftSibKey, rightSibKey, id);
+
+      insertAsSibling(node);
+
+      if (!nodeHashing.isBulkInsert()) {
+        adaptUpdateOperationsForInsert(id, node.getNodeKey());
+      }
+
+      return this;
+    } finally {
+      unLockIfNecessary();
+    }
+  }
+
+  @Override
+  public JsonNodeTrx insertObjectAsRightSibling() {
+    acquireLockIfNecessary();
+    try {
+      checkAccessAndCommit();
+
+      if (!nodeHashing.isBulkInsert()) {
+        if (getParentKind() != NodeKind.ARRAY) {
+          throw new SirixUsageException("Insert is not allowed if parent node is not an array node!");
+        }
+      }
+
+      final StructNode currentNode = nodeReadOnlyTrx.getStructuralNode();
+
+      final long parentKey = currentNode.getParentKey();
+      final long leftSibKey = currentNode.getNodeKey();
+      final long rightSibKey = currentNode.getRightSiblingKey();
+
+      final SirixDeweyID id = deweyIDManager.newRightSiblingID();
 
       final ObjectNode node = nodeFactory.createJsonObjectNode(parentKey, leftSibKey, rightSibKey, id);
 
@@ -760,8 +760,8 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       final StructNode structNode = nodeReadOnlyTrx.getStructuralNode();
 
       final long parentKey = structNode.getNodeKey();
-      final long rightSibKey = Fixed.NULL_NODE_KEY.getStandardProperty();
       final long leftSibKey = structNode.getLastChildKey();
+      final long rightSibKey = Fixed.NULL_NODE_KEY.getStandardProperty();
 
       final long pathNodeKey = getPathNodeKey(structNode.getNodeKey(), key, NodeKind.OBJECT_KEY);
 
@@ -846,49 +846,6 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   }
 
   @Override
-  public JsonNodeTrx insertObjectRecordAsRightSibling(final String key, final ObjectRecordValue<?> value) {
-    checkNotNull(key);
-    acquireLockIfNecessary();
-    try {
-      final NodeKind kind = getKind();
-
-      if (kind != NodeKind.OBJECT_KEY)
-        throw new SirixUsageException("Insert is not allowed if current node is not an object key node!");
-
-      checkAccessAndCommit();
-
-      final StructNode currentNode = nodeReadOnlyTrx.getStructuralNode();
-
-      final long parentKey = currentNode.getParentKey();
-      final long leftSibKey = currentNode.getNodeKey();
-      final long rightSibKey = currentNode.getRightSiblingKey();
-
-      moveToParent();
-      final long pathNodeKey = getPathNodeKey(currentNode.getNodeKey(), key, NodeKind.OBJECT_KEY);
-      moveTo(currentNode.getNodeKey());
-
-      final SirixDeweyID id = deweyIDManager.newRightSiblingID();
-
-      final ObjectKeyNode node =
-          nodeFactory.createJsonObjectKeyNode(parentKey, leftSibKey, rightSibKey, pathNodeKey, key, -1, id);
-
-      insertAsSibling(node);
-
-      insertValue(value);
-
-      setFirstChildOfObjectKeyNode(node);
-
-      if (!nodeHashing.isBulkInsert()) {
-        adaptUpdateOperationsForInsert(id, node.getNodeKey());
-      }
-
-      return this;
-    } finally {
-      unLockIfNecessary();
-    }
-  }
-
-  @Override
   public JsonNodeTrx insertObjectRecordAsLeftSibling(final String key, final ObjectRecordValue<?> value) {
     checkNotNull(key);
     acquireLockIfNecessary();
@@ -911,6 +868,49 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       moveTo(currentNode.getNodeKey());
 
       final SirixDeweyID id = deweyIDManager.newLeftSiblingID();
+
+      final ObjectKeyNode node =
+          nodeFactory.createJsonObjectKeyNode(parentKey, leftSibKey, rightSibKey, pathNodeKey, key, -1, id);
+
+      insertAsSibling(node);
+
+      insertValue(value);
+
+      setFirstChildOfObjectKeyNode(node);
+
+      if (!nodeHashing.isBulkInsert()) {
+        adaptUpdateOperationsForInsert(id, node.getNodeKey());
+      }
+
+      return this;
+    } finally {
+      unLockIfNecessary();
+    }
+  }
+
+  @Override
+  public JsonNodeTrx insertObjectRecordAsRightSibling(final String key, final ObjectRecordValue<?> value) {
+    checkNotNull(key);
+    acquireLockIfNecessary();
+    try {
+      final NodeKind kind = getKind();
+
+      if (kind != NodeKind.OBJECT_KEY)
+        throw new SirixUsageException("Insert is not allowed if current node is not an object key node!");
+
+      checkAccessAndCommit();
+
+      final StructNode currentNode = nodeReadOnlyTrx.getStructuralNode();
+
+      final long parentKey = currentNode.getParentKey();
+      final long leftSibKey = currentNode.getNodeKey();
+      final long rightSibKey = currentNode.getRightSiblingKey();
+
+      moveToParent();
+      final long pathNodeKey = getPathNodeKey(currentNode.getNodeKey(), key, NodeKind.OBJECT_KEY);
+      moveTo(currentNode.getNodeKey());
+
+      final SirixDeweyID id = deweyIDManager.newRightSiblingID();
 
       final ObjectKeyNode node =
           nodeFactory.createJsonObjectKeyNode(parentKey, leftSibKey, rightSibKey, pathNodeKey, key, -1, id);
@@ -984,8 +984,8 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       final StructNode currentNode = nodeReadOnlyTrx.getStructuralNode();
 
       final long parentKey = currentNode.getNodeKey();
-      final long rightSibKey = Fixed.NULL_NODE_KEY.getStandardProperty();
       final long leftSibKey = currentNode.getLastChildKey();
+      final long rightSibKey = Fixed.NULL_NODE_KEY.getStandardProperty();
 
       final long pathNodeKey = getPathNodeKey(currentNode.getNodeKey(), "__array__", NodeKind.ARRAY);
 
@@ -1000,6 +1000,39 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       indexController.notifyChange(ChangeType.INSERT, node, pathNodeKey);
 
       if (getParentKind() != NodeKind.OBJECT_KEY && nodeHashing.isBulkInsert()) {
+        adaptUpdateOperationsForInsert(id, node.getNodeKey());
+      }
+
+      return this;
+    } finally {
+      unLockIfNecessary();
+    }
+  }
+
+  @Override
+  public JsonNodeTrx insertArrayAsLeftSibling() {
+    acquireLockIfNecessary();
+    try {
+      checkAccessAndCommit();
+      checkPrecondition();
+
+      final StructNode currentNode = (StructNode) getCurrentNode();
+
+      final long parentKey = currentNode.getParentKey();
+      final long leftSibKey = currentNode.getLeftSiblingKey();
+      final long rightSibKey = currentNode.getNodeKey();
+
+      moveToParent();
+      final long pathNodeKey = getPathNodeKey(currentNode.getNodeKey(), "array", NodeKind.ARRAY);
+      moveTo(currentNode.getNodeKey());
+
+      final SirixDeweyID id = deweyIDManager.newLeftSiblingID();
+
+      final ArrayNode node = nodeFactory.createJsonArrayNode(parentKey, leftSibKey, rightSibKey, pathNodeKey, id);
+
+      insertAsSibling(node);
+
+      if (!nodeHashing.isBulkInsert()) {
         adaptUpdateOperationsForInsert(id, node.getNodeKey());
       }
 
@@ -1027,39 +1060,6 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       moveTo(currentNode.getNodeKey());
 
       final SirixDeweyID id = deweyIDManager.newRightSiblingID();
-
-      final ArrayNode node = nodeFactory.createJsonArrayNode(parentKey, leftSibKey, rightSibKey, pathNodeKey, id);
-
-      insertAsSibling(node);
-
-      if (!nodeHashing.isBulkInsert()) {
-        adaptUpdateOperationsForInsert(id, node.getNodeKey());
-      }
-
-      return this;
-    } finally {
-      unLockIfNecessary();
-    }
-  }
-
-  @Override
-  public JsonNodeTrx insertArrayAsLeftSibling() {
-    acquireLockIfNecessary();
-    try {
-      checkAccessAndCommit();
-      checkPrecondition();
-
-      final StructNode currentNode = (StructNode) getCurrentNode();
-
-      final long parentKey = currentNode.getParentKey();
-      final long rightSibKey = currentNode.getNodeKey();
-      final long leftSibKey = currentNode.getLeftSiblingKey();
-
-      moveToParent();
-      final long pathNodeKey = getPathNodeKey(currentNode.getNodeKey(), "array", NodeKind.ARRAY);
-      moveTo(currentNode.getNodeKey());
-
-      final SirixDeweyID id = deweyIDManager.newLeftSiblingID();
 
       final ArrayNode node = nodeFactory.createJsonArrayNode(parentKey, leftSibKey, rightSibKey, pathNodeKey, id);
 
@@ -1219,7 +1219,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   }
 
   @Override
-  public JsonNodeTrx insertStringValueAsRightSibling(final String value) {
+  public JsonNodeTrx insertStringValueAsLeftSibling(final String value) {
     checkNotNull(value);
     acquireLockIfNecessary();
     try {
@@ -1228,12 +1228,12 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
 
       final StructNode currentNode = (StructNode) getCurrentNode();
       final long parentKey = currentNode.getParentKey();
-      final long leftSibKey = currentNode.getNodeKey();
-      final long rightSibKey = currentNode.getRightSiblingKey();
+      final long leftSibKey = currentNode.getLeftSiblingKey();
+      final long rightSibKey = currentNode.getNodeKey();
 
       final byte[] textValue = getBytes(value);
 
-      final SirixDeweyID id = deweyIDManager.newRightSiblingID();
+      final SirixDeweyID id = deweyIDManager.newLeftSiblingID();
 
       final StringNode node =
           nodeFactory.createJsonStringNode(parentKey, leftSibKey, rightSibKey, textValue, useTextCompression, id);
@@ -1251,7 +1251,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   }
 
   @Override
-  public JsonNodeTrx insertStringValueAsLeftSibling(final String value) {
+  public JsonNodeTrx insertStringValueAsRightSibling(final String value) {
     checkNotNull(value);
     acquireLockIfNecessary();
     try {
@@ -1260,12 +1260,12 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
 
       final StructNode currentNode = (StructNode) getCurrentNode();
       final long parentKey = currentNode.getParentKey();
-      final long rightSibKey = currentNode.getNodeKey();
-      final long leftSibKey = currentNode.getLeftSiblingKey();
+      final long leftSibKey = currentNode.getNodeKey();
+      final long rightSibKey = currentNode.getRightSiblingKey();
 
       final byte[] textValue = getBytes(value);
 
-      final SirixDeweyID id = deweyIDManager.newLeftSiblingID();
+      final SirixDeweyID id = deweyIDManager.newRightSiblingID();
 
       final StringNode node =
           nodeFactory.createJsonStringNode(parentKey, leftSibKey, rightSibKey, textValue, useTextCompression, id);
@@ -1371,7 +1371,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   }
 
   @Override
-  public JsonNodeTrx insertBooleanValueAsRightSibling(boolean value) {
+  public JsonNodeTrx insertBooleanValueAsLeftSibling(boolean value) {
     acquireLockIfNecessary();
     try {
       checkAccessAndCommit();
@@ -1379,10 +1379,10 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
 
       final StructNode currentNode = (StructNode) getCurrentNode();
       final long parentKey = currentNode.getParentKey();
-      final long leftSibKey = currentNode.getNodeKey();
-      final long rightSibKey = currentNode.getRightSiblingKey();
+      final long leftSibKey = currentNode.getLeftSiblingKey();
+      final long rightSibKey = currentNode.getNodeKey();
 
-      final SirixDeweyID id = deweyIDManager.newRightSiblingID();
+      final SirixDeweyID id = deweyIDManager.newLeftSiblingID();
 
       final BooleanNode node = nodeFactory.createJsonBooleanNode(parentKey, leftSibKey, rightSibKey, value, id);
 
@@ -1399,7 +1399,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   }
 
   @Override
-  public JsonNodeTrx insertBooleanValueAsLeftSibling(boolean value) {
+  public JsonNodeTrx insertBooleanValueAsRightSibling(boolean value) {
     acquireLockIfNecessary();
     try {
       checkAccessAndCommit();
@@ -1407,10 +1407,10 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
 
       final StructNode currentNode = (StructNode) getCurrentNode();
       final long parentKey = currentNode.getParentKey();
-      final long rightSibKey = currentNode.getNodeKey();
-      final long leftSibKey = currentNode.getLeftSiblingKey();
+      final long leftSibKey = currentNode.getNodeKey();
+      final long rightSibKey = currentNode.getRightSiblingKey();
 
-      final SirixDeweyID id = deweyIDManager.newLeftSiblingID();
+      final SirixDeweyID id = deweyIDManager.newRightSiblingID();
 
       final BooleanNode node = nodeFactory.createJsonBooleanNode(parentKey, leftSibKey, rightSibKey, value, id);
 
@@ -1550,7 +1550,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   }
 
   @Override
-  public JsonNodeTrx insertNumberValueAsRightSibling(Number value) {
+  public JsonNodeTrx insertNumberValueAsLeftSibling(Number value) {
     acquireLockIfNecessary();
     try {
       checkAccessAndCommit();
@@ -1559,10 +1559,10 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       final StructNode structNode = nodeReadOnlyTrx.getStructuralNode();
 
       final long parentKey = structNode.getParentKey();
-      final long leftSibKey = structNode.getNodeKey();
-      final long rightSibKey = structNode.getRightSiblingKey();
+      final long rightSibKey = structNode.getNodeKey();
+      final long leftSibKey = structNode.getLeftSiblingKey();
 
-      final SirixDeweyID id = deweyIDManager.newRightSiblingID();
+      final SirixDeweyID id = deweyIDManager.newLeftSiblingID();
 
       final NumberNode node = nodeFactory.createJsonNumberNode(parentKey, leftSibKey, rightSibKey, value, id);
 
@@ -1579,7 +1579,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   }
 
   @Override
-  public JsonNodeTrx insertNumberValueAsLeftSibling(Number value) {
+  public JsonNodeTrx insertNumberValueAsRightSibling(Number value) {
     acquireLockIfNecessary();
     try {
       checkAccessAndCommit();
@@ -1588,10 +1588,10 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       final StructNode structNode = nodeReadOnlyTrx.getStructuralNode();
 
       final long parentKey = structNode.getParentKey();
-      final long rightSibKey = structNode.getNodeKey();
-      final long leftSibKey = structNode.getLeftSiblingKey();
+      final long leftSibKey = structNode.getNodeKey();
+      final long rightSibKey = structNode.getRightSiblingKey();
 
-      final SirixDeweyID id = deweyIDManager.newLeftSiblingID();
+      final SirixDeweyID id = deweyIDManager.newRightSiblingID();
 
       final NumberNode node = nodeFactory.createJsonNumberNode(parentKey, leftSibKey, rightSibKey, value, id);
 
@@ -1690,7 +1690,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   }
 
   @Override
-  public JsonNodeTrx insertNullValueAsRightSibling() {
+  public JsonNodeTrx insertNullValueAsLeftSibling() {
     acquireLockIfNecessary();
     try {
       checkAccessAndCommit();
@@ -1699,10 +1699,10 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       final StructNode currentNode = nodeReadOnlyTrx.getStructuralNode();
 
       final long parentKey = currentNode.getParentKey();
-      final long leftSibKey = currentNode.getNodeKey();
-      final long rightSibKey = currentNode.getRightSiblingKey();
+      final long rightSibKey = currentNode.getNodeKey();
+      final long leftSibKey = currentNode.getLeftSiblingKey();
 
-      final SirixDeweyID id = deweyIDManager.newRightSiblingID();
+      final SirixDeweyID id = deweyIDManager.newLeftSiblingID();
 
       final NullNode node = nodeFactory.createJsonNullNode(parentKey, leftSibKey, rightSibKey, id);
 
@@ -1719,7 +1719,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   }
 
   @Override
-  public JsonNodeTrx insertNullValueAsLeftSibling() {
+  public JsonNodeTrx insertNullValueAsRightSibling() {
     acquireLockIfNecessary();
     try {
       checkAccessAndCommit();
@@ -1728,10 +1728,10 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       final StructNode currentNode = nodeReadOnlyTrx.getStructuralNode();
 
       final long parentKey = currentNode.getParentKey();
-      final long rightSibKey = currentNode.getNodeKey();
-      final long leftSibKey = currentNode.getLeftSiblingKey();
+      final long leftSibKey = currentNode.getNodeKey();
+      final long rightSibKey = currentNode.getRightSiblingKey();
 
-      final SirixDeweyID id = deweyIDManager.newLeftSiblingID();
+      final SirixDeweyID id = deweyIDManager.newRightSiblingID();
 
       final NullNode node = nodeFactory.createJsonNullNode(parentKey, leftSibKey, rightSibKey, id);
 

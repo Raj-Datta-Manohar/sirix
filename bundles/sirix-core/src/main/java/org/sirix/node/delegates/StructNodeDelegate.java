@@ -197,9 +197,9 @@ public class StructNodeDelegate extends AbstractForwardingNode implements Struct
 
   @Override
   public int hashCode() {
-    return (lastChild==Fixed.NULL_NODE_KEY.getStandardProperty()) ? Objects.hashCode(
+    return ((lastChild==Fixed.NULL_NODE_KEY.getStandardProperty()) ? Objects.hashCode(
       childCount, nodeDelegate, firstChild, leftSibling, rightSibling, descendantCount) : Objects.hashCode(
-      childCount, nodeDelegate, firstChild, lastChild, leftSibling, rightSibling, descendantCount);
+      childCount, nodeDelegate, firstChild, lastChild, leftSibling, rightSibling, descendantCount));
   }
 
   @Override
