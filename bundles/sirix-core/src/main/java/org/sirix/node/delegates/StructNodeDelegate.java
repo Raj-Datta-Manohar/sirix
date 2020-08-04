@@ -50,7 +50,7 @@ public class StructNodeDelegate extends AbstractForwardingNode implements Struct
   private long firstChild;
 
   /** Pointer to the last child of the current node. */
-  private long lastChild = Fixed.NULL_NODE_KEY.getStandardProperty();
+  private long lastChild = -2L;
 
   /** Pointer to the right sibling of the current node. */
   private long rightSibling;
@@ -197,7 +197,7 @@ public class StructNodeDelegate extends AbstractForwardingNode implements Struct
 
   @Override
   public int hashCode() {
-    return ((lastChild==Fixed.NULL_NODE_KEY.getStandardProperty()) ? Objects.hashCode(
+    return ((lastChild==-2L) ? Objects.hashCode(
       childCount, nodeDelegate, firstChild, leftSibling, rightSibling, descendantCount) : Objects.hashCode(
       childCount, nodeDelegate, firstChild, lastChild, leftSibling, rightSibling, descendantCount));
   }
@@ -206,7 +206,7 @@ public class StructNodeDelegate extends AbstractForwardingNode implements Struct
   public BigInteger computeHash() {
     final Funnel<StructNode> nodeFunnel = (StructNode node, PrimitiveSink into) ->
     {
-      if(lastChild != Fixed.NULL_NODE_KEY.getStandardProperty()) {
+      if(lastChild != -2L) {
         into.putLong(node.getChildCount()).putLong(node.getDescendantCount()).putLong(node.getLeftSiblingKey()).putLong(
             node.getRightSiblingKey()).putLong(node.getFirstChildKey());
       } else {
