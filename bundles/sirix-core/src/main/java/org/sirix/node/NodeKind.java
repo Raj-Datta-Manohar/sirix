@@ -1474,7 +1474,9 @@ public enum NodeKind implements NodePersistenter {
       final JsonDocumentRootNode node = (JsonDocumentRootNode) record;
       putVarLong(sink, node.getRevision());
       putVarLong(sink, node.getFirstChildKey());
+      putVarLong(sink, node.getLastChildKey());
       sink.writeByte(node.hasFirstChild() ? (byte) 1 : (byte) 0);
+      sink.writeByte(node.hasLastChild() ? (byte) 1 : (byte) 0);
       sink.writeLong(node.getDescendantCount());
     }
 
@@ -1756,6 +1758,7 @@ public enum NodeKind implements NodePersistenter {
 
     if (!isValueNode) {
       putVarLong(sink, nodeDel.getNodeKey() - nodeDel.getFirstChildKey());
+      putVarLong(sink, nodeDel.getNodeKey() - nodeDel.getLastChildKey());
       if (storeChildCount) {
         putVarLong(sink, nodeDel.getNodeKey() - nodeDel.getChildCount());
       }
@@ -1785,15 +1788,14 @@ public enum NodeKind implements NodePersistenter {
     rightSibl = currKey - getVarLong(source);
     leftSibl = currKey - getVarLong(source);
 
-    if (isValueNode)
+    if (isValueNode) {
       firstChild = Fixed.NULL_NODE_KEY.getStandardProperty();
-    else
-      firstChild = currKey - getVarLong(source);
-
-    if (isJsonNode)
       lastChild = Fixed.NULL_NODE_KEY.getStandardProperty();
-    else
+    }
+    else {
+      firstChild = currKey - getVarLong(source);
       lastChild = currKey - getVarLong(source);
+    }
 
     if (isValueNode || !storeChildNodes)
       childCount = 0;

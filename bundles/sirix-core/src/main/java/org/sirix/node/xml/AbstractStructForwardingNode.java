@@ -98,7 +98,7 @@ public abstract class AbstractStructForwardingNode extends AbstractForwardingNod
   }
 
   @Override
-  public void setLastChildKey(long key) {
+  public void setLastChildKey(final long key) {
     structDelegate().setLastChildKey(key);
   }
 
