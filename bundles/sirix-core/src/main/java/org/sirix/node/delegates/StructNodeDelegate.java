@@ -197,7 +197,7 @@ public class StructNodeDelegate extends AbstractForwardingNode implements Struct
 
   @Override
   public int hashCode() {
-    return ((lastChild==Fixed.INVALID_KEY_FOR_TYPE_CHECK.getStandardProperty()) ? Objects.hashCode(
+    return ((lastChild == Fixed.INVALID_KEY_FOR_TYPE_CHECK.getStandardProperty()) ? Objects.hashCode(
       childCount, nodeDelegate, firstChild, leftSibling, rightSibling, descendantCount) : Objects.hashCode(
       childCount, nodeDelegate, firstChild, lastChild, leftSibling, rightSibling, descendantCount));
   }
@@ -206,7 +206,7 @@ public class StructNodeDelegate extends AbstractForwardingNode implements Struct
   public BigInteger computeHash() {
     final Funnel<StructNode> nodeFunnel = (StructNode node, PrimitiveSink into) ->
     {
-      if(lastChild != Fixed.INVALID_KEY_FOR_TYPE_CHECK.getStandarProperty()) {
+      if(lastChild != Fixed.INVALID_KEY_FOR_TYPE_CHECK.getStandardProperty()) {
         into.putLong(node.getChildCount()).putLong(node.getDescendantCount()).putLong(node.getLeftSiblingKey()).putLong(
             node.getRightSiblingKey()).putLong(node.getFirstChildKey());
       } else {
