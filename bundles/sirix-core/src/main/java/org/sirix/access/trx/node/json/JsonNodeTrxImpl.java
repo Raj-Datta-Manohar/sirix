@@ -507,7 +507,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
           break;
         case AS_LAST_CHILD:
           moveToLastChild();
-          break;  
+          break;
         case AS_LEFT_SIBLING:
           moveToLeftSibling();
           break;
@@ -611,7 +611,8 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
 
       final SirixDeweyID id = structNode.getKind() == NodeKind.OBJECT_KEY
           ? deweyIDManager.newRecordValueID()
-          : deweyIDManager.newLastChildID();
+          : ((structNode.getChildCount() == 0)
+              ? deweyIDManager.newFirstChildID() : deweyIDManager.newLastChildID());
 
       final ObjectNode node = nodeFactory.createJsonObjectNode(parentKey, leftSibKey, rightSibKey, id);
 
@@ -765,7 +766,8 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
 
       final long pathNodeKey = getPathNodeKey(structNode.getNodeKey(), key, NodeKind.OBJECT_KEY);
 
-      final SirixDeweyID id = deweyIDManager.newLastChildID();
+      final SirixDeweyID id = (structNode.getChildCount() == 0)
+                                ? deweyIDManager.newFirstChildID() : deweyIDManager.newLastChildID();
 
       final ObjectKeyNode node = nodeFactory.createJsonObjectKeyNode(parentKey,
                                                                      leftSibKey,
@@ -991,7 +993,8 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
 
       final SirixDeweyID id = currentNode.getKind() == NodeKind.OBJECT_KEY
           ? deweyIDManager.newRecordValueID()
-          : deweyIDManager.newLastChildID();
+          : ((currentNode.getChildCount() == 0)
+            ? deweyIDManager.newFirstChildID() : deweyIDManager.newLastChildID());
 
       final ArrayNode node = nodeFactory.createJsonArrayNode(parentKey, leftSibKey, rightSibKey, pathNodeKey, id);
 
@@ -1176,7 +1179,8 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
         id = deweyIDManager.newRecordValueID();
         node = nodeFactory.createJsonObjectStringNode(parentKey, textValue, useTextCompression, id);
       } else {
-        id = deweyIDManager.newLastChildID();
+        id = ((structNode.getChildCount() == 0)
+              ? deweyIDManager.newFirstChildID() : deweyIDManager.newLastChildID());
         final long leftSibKey = structNode.getLastChildKey();
         final long rightSibKey = Fixed.NULL_NODE_KEY.getStandardProperty();
         node = nodeFactory.createJsonStringNode(parentKey, leftSibKey, rightSibKey, textValue, useTextCompression, id);
@@ -1349,7 +1353,8 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
         id = deweyIDManager.newRecordValueID();
         node = nodeFactory.createJsonObjectBooleanNode(parentKey, value, id);
       } else {
-        id = deweyIDManager.newLastChildID();
+        id = ((structNode.getChildCount() == 0)
+              ? deweyIDManager.newFirstChildID() : deweyIDManager.newLastChildID());
         final long leftSibKey = structNode.getLastChildKey();
         final long rightSibKey = Fixed.NULL_NODE_KEY.getStandardProperty();
         node = nodeFactory.createJsonBooleanNode(parentKey, leftSibKey, rightSibKey, value, id);
@@ -1528,7 +1533,8 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
         id = deweyIDManager.newRecordValueID();
         node = nodeFactory.createJsonObjectNumberNode(parentKey, value, id);
       } else {
-        id = deweyIDManager.newLastChildID();
+        id = ((currentNode.getChildCount() == 0)
+              ? deweyIDManager.newFirstChildID() : deweyIDManager.newLastChildID());
         final long leftSibKey = currentNode.getLastChildKey();
         final long rightSibKey = Fixed.NULL_NODE_KEY.getStandardProperty();
         node = nodeFactory.createJsonNumberNode(parentKey, leftSibKey, rightSibKey, value, id);
@@ -1671,7 +1677,8 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
         id = deweyIDManager.newRecordValueID();
         node = nodeFactory.createJsonObjectNullNode(parentKey, id);
       } else {
-        id = deweyIDManager.newLastChildID();
+        id = ((structNode.getChildCount() == 0)
+              ? deweyIDManager.newFirstChildID() : deweyIDManager.newLastChildID());
         final long leftSibKey = structNode.getLeftSiblingKey();
         final long rightSibKey = Fixed.NULL_NODE_KEY.getStandardProperty();
         node = nodeFactory.createJsonNullNode(parentKey, leftSibKey, rightSibKey, id);
