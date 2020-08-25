@@ -60,7 +60,6 @@ import org.sirix.node.NodeKind;
 import org.sirix.node.SirixDeweyID;
 import org.sirix.node.immutable.json.ImmutableArrayNode;
 import org.sirix.node.immutable.json.ImmutableObjectKeyNode;
-import org.sirix.node.interfaces.DataRecord;
 import org.sirix.node.interfaces.Node;
 import org.sirix.node.interfaces.StructNode;
 import org.sirix.node.interfaces.immutable.ImmutableJsonNode;
@@ -70,7 +69,6 @@ import org.sirix.node.json.*;
 import org.sirix.page.NamePage;
 import org.sirix.page.PageKind;
 import org.sirix.page.UberPage;
-import org.sirix.page.UnorderedKeyValuePage;
 import org.sirix.service.json.shredder.JsonShredder;
 import org.sirix.service.xml.shredder.InsertPosition;
 import org.sirix.settings.Constants;
@@ -193,7 +191,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   /**
    * The page write trx.
    */
-  private PageTrx<Long, DataRecord, UnorderedKeyValuePage> pageWriteTrx;
+  private PageTrx pageTrx;
 
   /**
    * Collection holding pre-commit hooks.
@@ -221,18 +219,33 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   private final Map<Long, DiffTuple> updateOperationsUnordered;
 
   /**
-   * Flag to decide whether to store child count
+   * Flag to decide whether to store child count.
    */
   private final boolean storeChildCount;
 
+  /**
+   * Determines if a value can be replaced, used for replacing an object record.
+   */
   private boolean canRemoveValue;
 
+  /**
+   * The revision number before bulk-inserting nodes.
+   */
   private int beforeBulkInsertionRevisionNumber;
 
+  /**
+   * {@code true}, if transaction is auto-committing, {@code false} if not.
+   */
   private final boolean isAutoCommitting;
 
+  /**
+   * Transaction state.
+   */
   private volatile State state;
 
+  /**
+   * The transaction states.
+   */
   private enum State {
     Running,
 
@@ -256,7 +269,6 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
    * @throws SirixIOException    if the reading of the props is failing
    * @throws SirixUsageException if {@code pMaxNodeCount < 0} or {@code pMaxTime < 0}
    */
-  @SuppressWarnings("unchecked")
   JsonNodeTrxImpl(final InternalResourceManager<JsonNodeReadOnlyTrx, JsonNodeTrx> resourceManager,
       final InternalJsonNodeReadOnlyTrx nodeReadTrx, final PathSummaryWriter<JsonNodeReadOnlyTrx> pathSummaryWriter,
       final @Nonnegative int maxNodeCount, final TimeUnit timeUnit, final @Nonnegative int maxTime,
@@ -274,7 +286,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
     this.pathSummaryWriter = pathSummaryWriter;
 
     indexController = resourceManager.getWtxIndexController(nodeReadOnlyTrx.getPageTrx().getRevisionNumber());
-    pageWriteTrx = (PageTrx<Long, DataRecord, UnorderedKeyValuePage>) nodeReadOnlyTrx.getPageTrx();
+    pageTrx = (PageTrx) nodeReadOnlyTrx.getPageTrx();
     storeChildCount = this.resourceManager.getResourceConfig().getStoreChildCount();
 
     this.nodeFactory = Preconditions.checkNotNull(nodeFactory);
@@ -283,11 +295,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
     this.maxNodeCount = maxNodeCount;
     this.modificationCount = 0L;
 
-    if (maxNodeCount > 0 || maxTime > 0) {
-      isAutoCommitting = true;
-    } else {
-      isAutoCommitting = false;
-    }
+    isAutoCommitting = maxNodeCount > 0 || maxTime > 0;
 
     if (maxTime > 0) {
       threadPool.scheduleWithFixedDelay(() -> commit("autoCommit"), maxTime, maxTime, timeUnit);
@@ -372,8 +380,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   }
 
   @Override
-  public JsonNodeTrx insertSubtreeAsLastChild(final JsonReader reader, Commit commit,
-      CheckParentNode checkParentNode) {
+  public JsonNodeTrx insertSubtreeAsLastChild(final JsonReader reader, Commit commit, CheckParentNode checkParentNode) {
     return insertSubtree(reader, InsertPosition.AS_LAST_CHILD, commit, checkParentNode);
   }
 
@@ -429,7 +436,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
 
       // $CASES-OMITTED$
       switch (insertionPosition) {
-        case AS_FIRST_CHILD -> {
+        case AS_FIRST_CHILD, AS_LAST_CHILD -> {
           if (nodeKind != NodeKind.JSON_DOCUMENT && nodeKind != NodeKind.ARRAY && nodeKind != NodeKind.OBJECT) {
             throw new IllegalStateException("Current node must either be the document root, an array or an object key.");
           }
@@ -447,33 +454,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
             default:
           }
         }
-        case AS_LAST_CHILD -> {
-          if (nodeKind != NodeKind.JSON_DOCUMENT && nodeKind != NodeKind.ARRAY && nodeKind != NodeKind.OBJECT) {
-            throw new IllegalStateException("Current node must either be the document root, an array or an object key.");
-          }
-          switch (peekedJsonToken) {
-            case BEGIN_OBJECT:
-              if (nodeKind == NodeKind.OBJECT)
-                skipRootJsonToken = true;
-              break;
-            case BEGIN_ARRAY:
-              if (nodeKind != NodeKind.ARRAY && nodeKind != NodeKind.JSON_DOCUMENT) {
-                throw new IllegalStateException("Current node in storage must be an array node.");
-              }
-              break;
-            // $CASES-OMITTED$
-            default:
-          }
-        }
-        case AS_LEFT_SIBLING -> {
-          if (checkParentNode == CheckParentNode.Yes) {
-            final NodeKind parentKind = getParentKind();
-            if (parentKind != NodeKind.ARRAY) {
-              throw new IllegalStateException("Current parent node must be an array node.");
-            }
-          }
-        }
-        case AS_RIGHT_SIBLING -> {
+        case AS_LEFT_SIBLING, AS_RIGHT_SIBLING -> {
           if (checkParentNode == CheckParentNode.Yes) {
             final NodeKind parentKind = getParentKind();
             if (parentKind != NodeKind.ARRAY) {
@@ -810,8 +791,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   }
 
   private void setFirstChildOfObjectKeyNode(final ObjectKeyNode node) {
-    final ObjectKeyNode objectKeyNode =
-        (ObjectKeyNode) pageWriteTrx.prepareEntryForModification(node.getNodeKey(), PageKind.RECORDPAGE, -1);
+    final ObjectKeyNode objectKeyNode = pageTrx.prepareRecordForModification(node.getNodeKey(), PageKind.RECORDPAGE, -1);
     objectKeyNode.setFirstChildKey(getNodeKey());
   }
 
@@ -1457,8 +1437,6 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       pathNodeKey = -1;
     }
 
-    moveTo(node.getNodeKey());
-
     nodeReadOnlyTrx.setCurrentNode(node);
 
     indexController.notifyChange(ChangeType.INSERT, node, pathNodeKey);
@@ -1799,7 +1777,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
         removeValue();
 
         // Then remove node.
-        pageWriteTrx.removeEntry(currentNode.getNodeKey(), PageKind.RECORDPAGE, -1);
+        pageTrx.removeRecord(currentNode.getNodeKey(), PageKind.RECORDPAGE, -1);
       }
 
       // Remove the name of subtree-root.
@@ -1874,12 +1852,11 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
    * @throws SirixException if Sirix fails
    */
   private void removeName() {
-    if (getCurrentNode() instanceof ImmutableNameNode) {
-      final ImmutableNameNode node = ((ImmutableNameNode) getCurrentNode());
+    if (getCurrentNode() instanceof ImmutableNameNode node) {
       indexController.notifyChange(ChangeType.DELETE, node, node.getPathNodeKey());
       final NodeKind nodeKind = node.getKind();
-      final NamePage page = ((NamePage) pageWriteTrx.getActualRevisionRootPage().getNamePageReference().getPage());
-      page.removeName(node.getLocalNameKey(), nodeKind, pageWriteTrx);
+      final NamePage page = ((NamePage) pageTrx.getActualRevisionRootPage().getNamePageReference().getPage());
+      page.removeName(node.getLocalNameKey(), nodeKind, pageTrx);
 
       assert nodeKind != NodeKind.JSON_DOCUMENT;
       if (buildPathSummary) {
@@ -1903,14 +1880,14 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       // Remove old keys from mapping.
       final NodeKind nodeKind = node.getKind();
       final int oldNameKey = node.getNameKey();
-      final NamePage page = ((NamePage) pageWriteTrx.getActualRevisionRootPage().getNamePageReference().getPage());
-      page.removeName(oldNameKey, nodeKind, pageWriteTrx);
+      final NamePage page = ((NamePage) pageTrx.getActualRevisionRootPage().getNamePageReference().getPage());
+      page.removeName(oldNameKey, nodeKind, pageTrx);
 
       // Create new key for mapping.
-      final int newNameKey = pageWriteTrx.createNameKey(key, node.getKind());
+      final int newNameKey = pageTrx.createNameKey(key, node.getKind());
 
       // Set new keys for current node.
-      node = (ObjectKeyNode) pageWriteTrx.prepareEntryForModification(node.getNodeKey(), PageKind.RECORDPAGE, -1);
+      node = pageTrx.prepareRecordForModification(node.getNodeKey(), PageKind.RECORDPAGE, -1);
       node.setNameKey(newNameKey);
 
       // Adapt path summary.
@@ -1982,9 +1959,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       final byte[] byteVal = getBytes(value);
 
       final AbstractStringNode node =
-          (AbstractStringNode) pageWriteTrx.prepareEntryForModification(nodeReadOnlyTrx.getCurrentNode().getNodeKey(),
-                                                                        PageKind.RECORDPAGE,
-                                                                        -1);
+          pageTrx.prepareRecordForModification(nodeReadOnlyTrx.getCurrentNode().getNodeKey(), PageKind.RECORDPAGE, -1);
       node.setValue(byteVal);
 
       nodeReadOnlyTrx.setCurrentNode(node);
@@ -2021,9 +1996,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       final BigInteger oldHash = nodeReadOnlyTrx.getCurrentNode().computeHash();
 
       final AbstractBooleanNode node =
-          (AbstractBooleanNode) pageWriteTrx.prepareEntryForModification(nodeReadOnlyTrx.getCurrentNode().getNodeKey(),
-                                                                         PageKind.RECORDPAGE,
-                                                                         -1);
+          pageTrx.prepareRecordForModification(nodeReadOnlyTrx.getCurrentNode().getNodeKey(), PageKind.RECORDPAGE, -1);
       node.setValue(value);
 
       nodeReadOnlyTrx.setCurrentNode(node);
@@ -2061,9 +2034,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       final BigInteger oldHash = nodeReadOnlyTrx.getCurrentNode().computeHash();
 
       final AbstractNumberNode node =
-          (AbstractNumberNode) pageWriteTrx.prepareEntryForModification(nodeReadOnlyTrx.getCurrentNode().getNodeKey(),
-                                                                        PageKind.RECORDPAGE,
-                                                                        -1);
+          pageTrx.prepareRecordForModification(nodeReadOnlyTrx.getCurrentNode().getNodeKey(), PageKind.RECORDPAGE, -1);
       node.setValue(value);
 
       nodeReadOnlyTrx.setCurrentNode(node);
@@ -2093,8 +2064,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
 
       // Reset internal transaction state to new uber page.
       resourceManager.closeNodePageWriteTransaction(getId());
-      final PageTrx<Long, DataRecord, UnorderedKeyValuePage> pageTrx =
-          resourceManager.createPageTransaction(trxID, revision, revNumber - 1, Abort.NO, true);
+      final PageTrx pageTrx = resourceManager.createPageTransaction(trxID, revision, revNumber - 1, Abort.NO, true);
       nodeReadOnlyTrx.setPageReadTransaction(null);
       nodeReadOnlyTrx.setPageReadTransaction(pageTrx);
       resourceManager.setNodePageWriteTransaction(getId(), pageTrx);
@@ -2164,9 +2134,9 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       // Close current page transaction.
       final long trxID = getId();
       final int revision = getRevisionNumber();
-      final int revNumber = pageWriteTrx.getUberPage().isBootstrap() ? 0 : revision - 1;
+      final int revNumber = pageTrx.getUberPage().isBootstrap() ? 0 : revision - 1;
 
-      final UberPage uberPage = pageWriteTrx.rollback();
+      final UberPage uberPage = pageTrx.rollback();
 
       // Remember succesfully committed uber page in resource manager.
       resourceManager.setLastCommittedUberPage(uberPage);
@@ -2175,12 +2145,12 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       nodeReadOnlyTrx.setPageReadTransaction(null);
       removeCommitFile();
 
-      pageWriteTrx = resourceManager.createPageTransaction(trxID, revNumber, revNumber, Abort.YES, true);
-      nodeReadOnlyTrx.setPageReadTransaction(pageWriteTrx);
-      resourceManager.setNodePageWriteTransaction(getId(), pageWriteTrx);
+      pageTrx = resourceManager.createPageTransaction(trxID, revNumber, revNumber, Abort.YES, true);
+      nodeReadOnlyTrx.setPageReadTransaction(pageTrx);
+      resourceManager.setNodePageWriteTransaction(getId(), pageTrx);
 
       nodeFactory = null;
-      nodeFactory = new JsonNodeFactoryImpl(hashFunction, pageWriteTrx);
+      nodeFactory = new JsonNodeFactoryImpl(hashFunction, pageTrx);
 
       reInstantiateIndexes();
 
@@ -2214,17 +2184,17 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   void reInstantiate(final @Nonnegative long trxID, final @Nonnegative int revNumber) {
     // Reset page transaction to new uber page.
     resourceManager.closeNodePageWriteTransaction(getId());
-    pageWriteTrx = null;
-    pageWriteTrx = resourceManager.createPageTransaction(trxID, revNumber, revNumber, Abort.NO, true);
+    pageTrx = null;
+    pageTrx = resourceManager.createPageTransaction(trxID, revNumber, revNumber, Abort.NO, true);
     nodeReadOnlyTrx.setPageReadTransaction(null);
-    nodeReadOnlyTrx.setPageReadTransaction(pageWriteTrx);
-    resourceManager.setNodePageWriteTransaction(getId(), pageWriteTrx);
+    nodeReadOnlyTrx.setPageReadTransaction(pageTrx);
+    resourceManager.setNodePageWriteTransaction(getId(), pageTrx);
 
     nodeFactory = null;
-    nodeFactory = new JsonNodeFactoryImpl(hashFunction, pageWriteTrx);
+    nodeFactory = new JsonNodeFactoryImpl(hashFunction, pageTrx);
     final boolean isBulkInsert = nodeHashing.isBulkInsert();
     nodeHashing = null;
-    nodeHashing = new JsonNodeHashing(hashType, nodeReadOnlyTrx, pageWriteTrx);
+    nodeHashing = new JsonNodeHashing(hashType, nodeReadOnlyTrx, pageTrx);
     nodeHashing.setBulkInsert(isBulkInsert);
 
     updateOperationsUnordered.clear();
@@ -2238,7 +2208,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
     if (buildPathSummary) {
       pathSummaryWriter = null;
       pathSummaryWriter =
-          new PathSummaryWriter<>(pageWriteTrx, nodeReadOnlyTrx.getResourceManager(), nodeFactory, nodeReadOnlyTrx);
+          new PathSummaryWriter<>(pageTrx, nodeReadOnlyTrx.getResourceManager(), nodeFactory, nodeReadOnlyTrx);
     }
 
     // Recreate index listeners.
@@ -2270,8 +2240,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
   private void adaptForInsert(final StructNode structNode) {
     assert structNode != null;
 
-    final StructNode parent =
-        (StructNode) pageWriteTrx.prepareEntryForModification(structNode.getParentKey(), PageKind.RECORDPAGE, -1);
+    final StructNode parent = pageTrx.prepareRecordForModification(structNode.getParentKey(), PageKind.RECORDPAGE, -1);
 
     if (storeChildCount) {
       parent.incrementChildCount();
@@ -2281,22 +2250,19 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       parent.setFirstChildKey(structNode.getNodeKey());
     }
 
-    if(!structNode.hasRightSibling()) {
+    if (!structNode.hasRightSibling()) {
       parent.setLastChildKey(structNode.getNodeKey());
     }
 
     if (structNode.hasRightSibling()) {
       final StructNode rightSiblingNode =
-          (StructNode) pageWriteTrx.prepareEntryForModification(structNode.getRightSiblingKey(),
-                                                                PageKind.RECORDPAGE,
-                                                                -1);
+          pageTrx.prepareRecordForModification(structNode.getRightSiblingKey(), PageKind.RECORDPAGE, -1);
       rightSiblingNode.setLeftSiblingKey(structNode.getNodeKey());
     }
+
     if (structNode.hasLeftSibling()) {
       final StructNode leftSiblingNode =
-          (StructNode) pageWriteTrx.prepareEntryForModification(structNode.getLeftSiblingKey(),
-                                                                PageKind.RECORDPAGE,
-                                                                -1);
+          pageTrx.prepareRecordForModification(structNode.getLeftSiblingKey(), PageKind.RECORDPAGE, -1);
       leftSiblingNode.setRightSiblingKey(structNode.getNodeKey());
     }
   }
@@ -2321,24 +2287,23 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
     // Adapt left sibling node if there is one.
     if (oldNode.hasLeftSibling()) {
       final StructNode leftSibling =
-          (StructNode) pageWriteTrx.prepareEntryForModification(oldNode.getLeftSiblingKey(), PageKind.RECORDPAGE, -1);
+          pageTrx.prepareRecordForModification(oldNode.getLeftSiblingKey(), PageKind.RECORDPAGE, -1);
       leftSibling.setRightSiblingKey(oldNode.getRightSiblingKey());
     }
 
     // Adapt right sibling node if there is one.
     if (oldNode.hasRightSibling()) {
       final StructNode rightSibling =
-          (StructNode) pageWriteTrx.prepareEntryForModification(oldNode.getRightSiblingKey(), PageKind.RECORDPAGE, -1);
+          pageTrx.prepareRecordForModification(oldNode.getRightSiblingKey(), PageKind.RECORDPAGE, -1);
       rightSibling.setLeftSiblingKey(oldNode.getLeftSiblingKey());
     }
 
     // Adapt parent, if node has left sibling now it is a first child, and right sibling will be a last child
-    StructNode parent =
-        (StructNode) pageWriteTrx.prepareEntryForModification(oldNode.getParentKey(), PageKind.RECORDPAGE, -1);
+    StructNode parent = pageTrx.prepareRecordForModification(oldNode.getParentKey(), PageKind.RECORDPAGE, -1);
     if (!oldNode.hasLeftSibling()) {
       parent.setFirstChildKey(oldNode.getRightSiblingKey());
     }
-    if(!oldNode.hasRightSibling()) {
+    if (!oldNode.hasRightSibling()) {
       parent.setLastChildKey(oldNode.getLeftSiblingKey());
     }
 
@@ -2354,7 +2319,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
 
     // Remove old node.
     moveTo(oldNode.getNodeKey());
-    pageWriteTrx.removeEntry(oldNode.getNodeKey(), PageKind.RECORDPAGE, -1);
+    pageTrx.removeRecord(oldNode.getNodeKey(), PageKind.RECORDPAGE, -1);
   }
 
   // ////////////////////////////////////////////////////////////
@@ -2473,7 +2438,7 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
       // Reset modification counter.
       modificationCount = 0L;
 
-      final UberPage uberPage = commitMessage == null ? pageWriteTrx.commit() : pageWriteTrx.commit(commitMessage);
+      final UberPage uberPage = commitMessage == null ? pageTrx.commit() : pageTrx.commit(commitMessage);
 
       // Remember succesfully committed uber page in resource manager.
       resourceManager.setLastCommittedUberPage(uberPage);
@@ -2529,11 +2494,10 @@ final class JsonNodeTrxImpl extends AbstractForwardingJsonNodeReadOnlyTrx implem
     }
   }
 
-  @SuppressWarnings("unchecked")
   @Override
-  public PageTrx<Long, DataRecord, UnorderedKeyValuePage> getPageWtx() {
+  public PageTrx getPageWtx() {
     nodeReadOnlyTrx.assertNotClosed();
-    return (PageTrx<Long, DataRecord, UnorderedKeyValuePage>) nodeReadOnlyTrx.getPageTrx();
+    return (PageTrx) nodeReadOnlyTrx.getPageTrx();
   }
 
   @Override

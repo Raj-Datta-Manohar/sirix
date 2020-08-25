@@ -1,24 +1,27 @@
-package org.sirix.index.avltree;
+package org.sirix.index.redblacktree;
 
 import com.google.common.collect.AbstractIterator;
 import org.sirix.api.Move;
 import org.sirix.api.NodeCursor;
 import org.sirix.api.PageReadOnlyTrx;
+import org.sirix.api.PageTrx;
+import org.sirix.axis.DescendantAxis;
+import org.sirix.axis.IncludeSelf;
+import org.sirix.cache.RBIndexKey;
+import org.sirix.cache.Cache;
 import org.sirix.exception.SirixIOException;
 import org.sirix.index.IndexType;
 import org.sirix.index.SearchMode;
-import org.sirix.index.avltree.interfaces.References;
+import org.sirix.index.redblacktree.interfaces.References;
 import org.sirix.node.NodeKind;
 import org.sirix.node.NullNode;
-import org.sirix.node.interfaces.Node;
 import org.sirix.node.interfaces.DataRecord;
+import org.sirix.node.interfaces.Node;
 import org.sirix.node.interfaces.StructNode;
 import org.sirix.node.interfaces.immutable.ImmutableNode;
 import org.sirix.page.PageKind;
 import org.sirix.settings.Constants;
 import org.sirix.settings.Fixed;
-import org.sirix.utils.LogWrapper;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
@@ -34,91 +37,128 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Simple AVLTreeReader (balanced binary search-tree -- based on BaseX(.org) version).
  *
- * @author Johannes Lichtenberger, University of Konstanz
- *
  * @param <K> the key to search for or insert
  * @param <V> the value
+ * @author Johannes Lichtenberger, University of Konstanz
  */
-public final class AVLTreeReader<K extends Comparable<? super K>, V extends References> implements NodeCursor {
+@SuppressWarnings("ConstantConditions")
+public final class RBTreeReader<K extends Comparable<? super K>, V extends References> implements NodeCursor {
 
-  /** {@link LogWrapper} reference. */
-  private static final LogWrapper LOGWRAPPER = new LogWrapper(LoggerFactory.getLogger(AVLTreeReader.class));
+  /**
+   * Cache.
+   */
+  private final Cache<RBIndexKey, RBNode<?, ?>> cache;
 
-  /** Determines if tree is closed or not. */
-  private boolean mClosed;
+  /**
+   * The index type.
+   */
+  private final IndexType indexType;
 
-  /** Strong reference to currently selected node. */
-  private Node mCurrentNode;
+  /**
+   * The index number.
+   */
+  private final int indexNumber;
 
-  /** {@link PageReadOnlyTrx} for persistent storage. */
-  final PageReadOnlyTrx mPageReadTrx;
+  /**
+   * The revision number.
+   */
+  private final int revisionNumber;
 
-  /** Page kind. */
-  final PageKind mPageKind;
+  /**
+   * Determines if tree is closed or not.
+   */
+  private boolean isClosed;
 
-  /** Index number. */
-  final int mIndex;
+  /**
+   * Strong reference to currently selected node.
+   */
+  private Node currentNode;
 
-  /** Determines movement of the internal cursor. */
+  /**
+   * {@link PageReadOnlyTrx} for persistent storage.
+   */
+  final PageReadOnlyTrx pageReadOnlyTrx;
+
+  /**
+   * Page kind.
+   */
+  final PageKind pageKind;
+
+  /**
+   * Index number.
+   */
+  final int index;
+
+  /**
+   * Determines movement of the internal cursor.
+   */
   public enum MoveCursor {
-    /** Cursor should be moved document root. */
+    /**
+     * Cursor should be moved document root.
+     */
     TO_DOCUMENT_ROOT,
 
-    /** Cursor should not be moved. */
+    /**
+     * Cursor should not be moved.
+     */
     NO_MOVE
   }
 
   /**
    * Get a new instance.
    *
-   * @param <K> key instance which extends comparable
-   * @param <V> value
-   *
+   * @param <K>         key instance which extends comparable
+   * @param <V>         value
+   * @param cache       a cache shared between all read-only tree readers
    * @param pageReadTrx {@link PageReadOnlyTrx} for persistent storage
-   * @param type type of index
-   * @param index index
+   * @param type        type of index
+   * @param index       index
    * @return new tree instance
    */
-  public static <K extends Comparable<? super K>, V extends References> AVLTreeReader<K, V> getInstance(
-      final PageReadOnlyTrx pageReadTrx, final IndexType type, final @Nonnegative int index) {
-    return new AVLTreeReader<>(pageReadTrx, type, index);
+  public static <K extends Comparable<? super K>, V extends References> RBTreeReader<K, V> getInstance(
+      final Cache<RBIndexKey, RBNode<?, ?>> cache, final PageReadOnlyTrx pageReadTrx, final IndexType type,
+      @Nonnegative final int index) {
+    return new RBTreeReader<>(cache, pageReadTrx, type, index);
   }
 
   /**
    * Private constructor.
    *
-   * @param pageReadTrx {@link PageReadOnlyTrx} for persistent storage
-   * @param type kind of index
-   * @param index the index number
+   * @param cache           a cache shared between all read-only tree readers
+   * @param pageReadOnlyTrx {@link PageReadOnlyTrx} for persistent storage
+   * @param indexType       kind of indexType
+   * @param indexNumber     the indexNumber number
    */
-  private AVLTreeReader(final PageReadOnlyTrx pageReadTrx, final IndexType type, final int index) {
-    mPageReadTrx = checkNotNull(pageReadTrx);
-    switch (type) {
-      case PATH:
-        mPageKind = PageKind.PATHPAGE;
-        break;
-      case CAS:
-        mPageKind = PageKind.CASPAGE;
-        break;
-      case NAME:
-        mPageKind = PageKind.NAMEPAGE;
-        break;
-      default:
-        throw new IllegalStateException();
+  private RBTreeReader(final Cache<RBIndexKey, RBNode<?, ?>> cache, final PageReadOnlyTrx pageReadOnlyTrx,
+      final IndexType indexType, final int indexNumber) {
+    this.cache = checkNotNull(cache);
+    this.pageReadOnlyTrx = checkNotNull(pageReadOnlyTrx);
+    this.indexType = checkNotNull(indexType);
+    this.indexNumber = indexNumber;
+    revisionNumber = pageReadOnlyTrx.getRevisionNumber();
+    switch (indexType) {
+      case PATH -> pageKind = PageKind.PATHPAGE;
+      case CAS -> pageKind = PageKind.CASPAGE;
+      case NAME -> pageKind = PageKind.NAMEPAGE;
+      default -> throw new IllegalStateException();
     }
-    mClosed = false;
-    mIndex = index;
+    isClosed = false;
+    this.index = indexNumber;
 
-    try {
-      final Optional<? extends DataRecord> node =
-          mPageReadTrx.getRecord(Fixed.DOCUMENT_NODE_KEY.getStandardProperty(), mPageKind, index);
-      if (node.isPresent()) {
-        mCurrentNode = (Node) node.get();
-      } else {
-        throw new IllegalStateException("Node couldn't be fetched from persistent storage!");
+    final Optional<? extends DataRecord> node =
+        this.pageReadOnlyTrx.getRecord(Fixed.DOCUMENT_NODE_KEY.getStandardProperty(), PageKind.PATHSUMMARYPAGE, 0);
+    currentNode = (StructNode) node.orElseThrow(() -> new IllegalStateException(
+        "Node couldn't be fetched from persistent storage!"));
+
+    for (final long nodeKey : new DescendantAxis(this, IncludeSelf.YES)) {
+      if (nodeKey == 0) {
+        continue;
       }
-    } catch (final SirixIOException e) {
-      LOGWRAPPER.error(e.getMessage(), e);
+
+      if (pageReadOnlyTrx instanceof PageTrx) {
+        continue;
+      }
+      this.cache.put(new RBIndexKey(nodeKey, revisionNumber, indexType, indexNumber), getCurrentAVLNode());
     }
   }
 
@@ -141,42 +181,55 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
 
   // Internal function to dump data to a PrintStream instance.
   private void internalDump(final PrintStream out) {
-    out.println(getAVLNode());
-    final long nodeKey = getAVLNode().getNodeKey();
-    if (getAVLNode().hasLeftChild()) {
+    out.println(getCurrentAVLNode());
+    @SuppressWarnings("ConstantConditions")
+    final long nodeKey = getCurrentAVLNode().getNodeKey();
+    if (getCurrentAVLNode().hasLeftChild()) {
       moveToFirstChild();
       internalDump(out);
     }
     moveTo(nodeKey);
-    if (getAVLNode().hasRightChild()) {
+    if (getCurrentAVLNode().hasRightChild()) {
       moveToLastChild();
       internalDump(out);
     }
   }
 
   /**
-   * Get the {@link AVLNode}.
+   * Get the {@link RBNode}.
    *
-   * @return {@link AVLNode} instance
+   * @return {@link RBNode} instance
    */
-  AVLNode<K, V> getAVLNode() {
+  RBNode<K, V> getCurrentAVLNode() {
     assertNotClosed();
-    if (mCurrentNode.getKind() != NodeKind.XML_DOCUMENT && mCurrentNode.getKind() != NodeKind.JSON_DOCUMENT) {
+    if (currentNode.getKind() != NodeKind.XML_DOCUMENT && currentNode.getKind() != NodeKind.JSON_DOCUMENT) {
       @SuppressWarnings("unchecked")
-      final AVLNode<K, V> node = (AVLNode<K, V>) mCurrentNode;
+      final RBNode<K, V> node = (RBNode<K, V>) currentNode;
       return node;
     }
     return null;
   }
 
   /**
+   * Set the {@link RBNode}.
+   *
+   * @param node the node to set
+   * @return {@link RBNode} instance
+   */
+  RBNode<K, V> setCurrentAVLNode(final RBNode<K, V> node) {
+    assertNotClosed();
+    currentNode = node;
+    return node;
+  }
+
+  /**
    * Finds the specified key in the index and returns its value.
    *
    * @param startNodeKey the key of the node to start from
-   * @param key key to be found
-   * @param mode the search mode
+   * @param key          key to be found
+   * @param mode         the search mode
    * @return {@link Optional} reference (with the found value, or a reference which indicates that the
-   *         value hasn't been found)
+   * value hasn't been found)
    */
   public Optional<V> get(final long startNodeKey, final K key, final SearchMode mode) {
     assertNotClosed();
@@ -185,23 +238,75 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
       return Optional.empty();
     }
     moveToFirstChild();
-    AVLNode<K, V> node = getAVLNode();
+    RBNode<K, V> node = getCurrentAVLNode();
     return getNode(key, mode, node);
   }
 
   @Nonnull
-  private Optional<V> getNode(K key, SearchMode mode, AVLNode<K, V> node) {
+  private Optional<V> getNode(K key, SearchMode mode, RBNode<K, V> node) {
     while (true) {
       final int c = mode.compare(key, node.getKey());
       if (c == 0) {
         return Optional.ofNullable(node.getValue());
       }
-      final boolean moved = c < 0
-          ? moveToFirstChild().hasMoved()
-          : moveToLastChild().hasMoved();
-      if (moved) {
-        node = getAVLNode();
+
+      boolean moved;
+
+      if (c < 0) {
+        if (node.getLeftChild() != null) {
+          node = node.getLeftChild();
+          currentNode = node;
+          moved = true;
+        } else if (node.hasLeftChild()) {
+          //noinspection unchecked
+          node = pageReadOnlyTrx instanceof PageTrx
+              ? null
+              : (RBNode<K, V>) cache.get(new RBIndexKey(node.getLeftChildKey(),
+                                                        revisionNumber,
+                                                        indexType,
+                                                        indexNumber));
+
+          if (node == null) {
+            moved = moveToFirstChild().hasMoved();
+            if (moved) {
+              node = getCurrentAVLNode();
+            }
+          } else {
+            currentNode = node;
+            moved = true;
+          }
+        } else {
+          moved = false;
+        }
       } else {
+        if (node.getRightChild() != null) {
+          node = node.getRightChild();
+          currentNode = node;
+          moved = true;
+        } else if (node.hasRightChild()) {
+          //noinspection unchecked
+          node = pageReadOnlyTrx instanceof PageTrx
+              ? null
+              : (RBNode<K, V>) cache.get(new RBIndexKey(node.getRightChildKey(),
+                                                        revisionNumber,
+                                                        indexType,
+                                                        indexNumber));
+
+          if (node == null) {
+            moved = moveToLastChild().hasMoved();
+            if (moved) {
+              node = getCurrentAVLNode();
+            }
+          } else {
+            currentNode = node;
+            moved = true;
+          }
+        } else {
+          moved = false;
+        }
+      }
+
+      if (!moved) {
         break;
       }
     }
@@ -211,10 +316,10 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
   /**
    * Finds the specified key in the index and returns its value.
    *
-   * @param key key to be found
+   * @param key  key to be found
    * @param mode the search mode
    * @return {@link Optional} reference (with the found value, or a reference which indicates that the
-   *         value hasn't been found)
+   * value hasn't been found)
    */
   public Optional<V> get(final K key, final SearchMode mode) {
     assertNotClosed();
@@ -223,7 +328,7 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
       return Optional.empty();
     }
     moveToFirstChild();
-    AVLNode<K, V> node = getAVLNode();
+    RBNode<K, V> node = getCurrentAVLNode();
     return getNode(key, mode, node);
   }
 
@@ -232,22 +337,22 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
    * AVLNode.
    *
    * @param startNodeKey specified node
-   * @param key key to be found
-   * @param mode the search mode
-   * @return Optional {@link AVLNode} reference
+   * @param key          key to be found
+   * @param mode         the search mode
+   * @return Optional {@link RBNode} reference
    */
-  public Optional<AVLNode<K, V>> getAVLNode(final long startNodeKey, final K key, final SearchMode mode) {
+  public Optional<RBNode<K, V>> getCurrentAVLNode(final long startNodeKey, final K key, final SearchMode mode) {
     assertNotClosed();
     final boolean movedToStartNode = moveTo(startNodeKey).hasMoved();
     if (!movedToStartNode) {
       return Optional.empty();
     }
-    AVLNode<K, V> node = getAVLNode();
+    RBNode<K, V> node = getCurrentAVLNode();
     return getTheSearchedNode(key, mode, node);
   }
 
   @Nonnull
-  private Optional<AVLNode<K, V>> getTheSearchedNode(K key, SearchMode mode, AVLNode<K, V> node) {
+  private Optional<RBNode<K, V>> getTheSearchedNode(K key, SearchMode mode, RBNode<K, V> node) {
     while (true) {
       final int c = key.compareTo(node.getKey());
       if (mode != SearchMode.EQUAL && mode.compare(key, node.getKey()) == 0) {
@@ -258,11 +363,9 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
           return Optional.ofNullable(node);
         }
       }
-      final boolean moved = c < 0
-          ? moveToFirstChild().hasMoved()
-          : moveToLastChild().hasMoved();
+      final boolean moved = c < 0 ? moveToFirstChild().hasMoved() : moveToLastChild().hasMoved();
       if (moved) {
-        node = getAVLNode();
+        node = getCurrentAVLNode();
       } else {
         break;
       }
@@ -273,47 +376,46 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
   /**
    * Finds the specified key in the index and returns its AVLNode.
    *
-   * @param key key to be found
+   * @param key  key to be found
    * @param mode the search mode
-   * @return Optional {@link AVLNode} reference
+   * @return Optional {@link RBNode} reference
    */
-  public Optional<AVLNode<K, V>> getAVLNode(final K key, final SearchMode mode) {
+  public Optional<RBNode<K, V>> getCurrentAVLNode(final K key, final SearchMode mode) {
     assertNotClosed();
     moveToDocumentRoot();
     if (!((StructNode) getNode()).hasFirstChild()) {
       return Optional.empty();
     }
     moveToFirstChild();
-    AVLNode<K, V> node = getAVLNode();
+    RBNode<K, V> node = getCurrentAVLNode();
     return getTheSearchedNode(key, mode, node);
   }
 
   /**
    * Finds the specified key in the index and returns its AVLNode.
    *
-   * @param key key to be found
+   * @param key  key to be found
    * @param mode the search mode
    * @param comp comparator to be used to compare keys
-   * @return Optional {@link AVLNode} reference
+   * @return Optional {@link RBNode} reference
    */
-  public Optional<AVLNode<K, V>> getAVLNode(final K key, final SearchMode mode, final Comparator<? super K> comp) {
+  public Optional<RBNode<K, V>> getCurrentAVLNode(final K key, final SearchMode mode,
+      final Comparator<? super K> comp) {
     assertNotClosed();
     moveToDocumentRoot();
     if (!((StructNode) getNode()).hasFirstChild()) {
       return Optional.empty();
     }
     moveToFirstChild();
-    AVLNode<K, V> node = getAVLNode();
+    RBNode<K, V> node = getCurrentAVLNode();
     while (true) {
       final int c = key.compareTo(node.getKey());
       if (mode.compare(key, node.getKey(), comp) == 0) {
         return Optional.ofNullable(node);
       }
-      final boolean moved = c < 0
-          ? moveToFirstChild().hasMoved()
-          : moveToLastChild().hasMoved();
+      final boolean moved = c < 0 ? moveToFirstChild().hasMoved() : moveToLastChild().hasMoved();
       if (moved) {
-        node = getAVLNode();
+        node = getCurrentAVLNode();
       } else {
         break;
       }
@@ -332,14 +434,14 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
 
   @Override
   public void close() {
-    mClosed = true;
+    isClosed = true;
   }
 
   /**
    * Make sure that the path summary is not yet closed when calling this method.
    */
   final void assertNotClosed() {
-    if (mClosed) {
+    if (isClosed) {
       throw new IllegalStateException("AVL tree reader is already closed.");
     }
   }
@@ -351,19 +453,19 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
    */
   private StructNode getStructuralNode() {
     assertNotClosed();
-    if (mCurrentNode instanceof StructNode) {
-      return (StructNode) mCurrentNode;
+    if (currentNode instanceof StructNode) {
+      return (StructNode) currentNode;
     } else {
-      return new NullNode(mCurrentNode);
+      return new NullNode(currentNode);
     }
   }
 
   @Override
   public boolean hasNode(final long key) {
     assertNotClosed();
-    final long currKey = mCurrentNode.getNodeKey();
+    final long currKey = currentNode.getNodeKey();
     final boolean moved = moveTo(key).hasMoved();
-    final Move<AVLTreeReader<K, V>> movedCursor = moveTo(currKey);
+    final Move<RBTreeReader<K, V>> movedCursor = moveTo(currKey);
     assert movedCursor.hasMoved() : "Must be movable back!";
     return moved;
   }
@@ -371,7 +473,7 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
   @Override
   public boolean hasParent() {
     assertNotClosed();
-    return mCurrentNode.hasParent();
+    return currentNode.hasParent();
   }
 
   @Override
@@ -383,8 +485,8 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
   @Override
   public boolean hasLastChild() {
     assertNotClosed();
-    if (mCurrentNode instanceof AVLNode) {
-      return getAVLNode().hasRightChild();
+    if (currentNode instanceof RBNode) {
+      return getCurrentAVLNode().hasRightChild();
     }
     return false;
   }
@@ -402,7 +504,7 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
   }
 
   @Override
-  public Move<AVLTreeReader<K, V>> moveTo(final long nodeKey) {
+  public Move<RBTreeReader<K, V>> moveTo(final long nodeKey) {
     assertNotClosed();
 
     if (nodeKey == Fixed.NULL_NODE_KEY.getStandardProperty()) {
@@ -410,61 +512,68 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
     }
 
     // Remember old node and fetch new one.
-    final Node oldNode = mCurrentNode;
+    final Node oldNode = currentNode;
     Optional<? extends Node> newNode;
     try {
       // Immediately return node from item list if node key negative.
-      @SuppressWarnings("unchecked")
-      final Optional<? extends Node> node =
-          (Optional<? extends Node>) mPageReadTrx.getRecord(nodeKey, mPageKind, mIndex);
-      newNode = node;
+      newNode = pageReadOnlyTrx.getRecord(nodeKey, pageKind, index);
     } catch (final SirixIOException e) {
       newNode = Optional.empty();
     }
 
     if (newNode.isPresent()) {
-      mCurrentNode = newNode.get();
+      currentNode = newNode.get();
       return Move.moved(this);
     } else {
-      mCurrentNode = oldNode;
+      currentNode = oldNode;
       return Move.notMoved();
     }
   }
 
   @Override
-  public Move<AVLTreeReader<K, V>> moveToDocumentRoot() {
+  public Move<RBTreeReader<K, V>> moveToDocumentRoot() {
     assertNotClosed();
     return moveTo(Fixed.DOCUMENT_NODE_KEY.getStandardProperty());
   }
 
   @Override
-  public Move<AVLTreeReader<K, V>> moveToParent() {
+  public Move<RBTreeReader<K, V>> moveToParent() {
     assertNotClosed();
-    return moveTo(mCurrentNode.getParentKey());
+    return moveTo(currentNode.getParentKey());
   }
 
   @Override
-  public Move<AVLTreeReader<K, V>> moveToFirstChild() {
+  public Move<RBTreeReader<K, V>> moveToFirstChild() {
     assertNotClosed();
-    if (mCurrentNode instanceof AVLNode) {
-      final AVLNode<K, V> node = getAVLNode();
+    if (currentNode instanceof RBNode) {
+      final RBNode<K, V> node = getCurrentAVLNode();
       if (!node.hasLeftChild()) {
         return Move.notMoved();
       }
-      return moveTo(node.getLeftChildKey());
+      final var move = moveTo(node.getLeftChildKey());
+      @SuppressWarnings("unchecked")
+      final var currentNode = (RBNode<K, V>) this.currentNode;
+      node.setLeftChild(currentNode);
+      currentNode.setParent(node);
+      return move;
     }
-    return moveTo(((StructNode) mCurrentNode).getFirstChildKey());
+    return moveTo(((StructNode) currentNode).getFirstChildKey());
   }
 
   @Override
-  public Move<AVLTreeReader<K, V>> moveToLastChild() {
+  public Move<RBTreeReader<K, V>> moveToLastChild() {
     assertNotClosed();
-    if (mCurrentNode instanceof AVLNode) {
-      final AVLNode<K, V> node = getAVLNode();
+    if (currentNode instanceof RBNode) {
+      final RBNode<K, V> node = getCurrentAVLNode();
       if (!node.hasRightChild()) {
         return Move.notMoved();
       }
-      return moveTo(node.getRightChildKey());
+      final var move = moveTo(node.getRightChildKey());
+      @SuppressWarnings("unchecked")
+      final var currentNode = (RBNode<K, V>) this.currentNode;
+      node.setRightChild(currentNode);
+      currentNode.setParent(node);
+      return move;
     }
     return Move.notMoved();
   }
@@ -478,18 +587,19 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
   @Override
   public Move<? extends NodeCursor> moveToNext() {
     assertNotClosed();
-    if (mCurrentNode instanceof AVLNode) {
+    if (currentNode instanceof RBNode) {
       @SuppressWarnings("unchecked")
-      final AVLNode<K, V> node = (AVLNode<K, V>) mCurrentNode;
+      final RBNode<K, V> node = (RBNode<K, V>) currentNode;
       if (node.hasLeftChild()) {
         moveToFirstChild();
       } else if (node.hasRightChild()) {
         moveToLastChild();
       } else {
-        while (moveToParent().trx().getNode() instanceof AVLNode && !hasLastChild()) {
-        }
+        do {
+          moveToParent();
+        } while (getNode() instanceof RBNode && !hasLastChild());
 
-        if (getNode() instanceof AVLNode) {
+        if (getNode() instanceof RBNode) {
           return Move.moved(moveToLastChild().trx());
         } else {
           return Move.notMoved();
@@ -504,13 +614,13 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
   }
 
   @Override
-  public Move<AVLTreeReader<K, V>> moveToLeftSibling() {
+  public Move<RBTreeReader<K, V>> moveToLeftSibling() {
     assertNotClosed();
     return Move.notMoved();
   }
 
   @Override
-  public Move<AVLTreeReader<K, V>> moveToRightSibling() {
+  public Move<RBTreeReader<K, V>> moveToRightSibling() {
     assertNotClosed();
     return Move.notMoved();
   }
@@ -518,7 +628,7 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
   @Override
   public long getNodeKey() {
     assertNotClosed();
-    return mCurrentNode.getNodeKey();
+    return currentNode.getNodeKey();
   }
 
   @Override
@@ -563,7 +673,7 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
   public NodeKind getParentKind() {
     assertNotClosed();
     if (hasParent()) {
-      final long nodeKey = mCurrentNode.getNodeKey();
+      final long nodeKey = currentNode.getNodeKey();
       final NodeKind parentKind = moveToParent().trx().getKind();
       moveTo(nodeKey);
       return parentKind;
@@ -574,13 +684,13 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
   @Override
   public NodeKind getKind() {
     assertNotClosed();
-    return mCurrentNode.getKind();
+    return currentNode.getKind();
   }
 
   @Override
   public ImmutableNode getNode() {
     assertNotClosed();
-    return mCurrentNode;
+    return currentNode;
   }
 
   @Override
@@ -640,38 +750,43 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
    * Iterator supporting different search modes.
    *
    * @author Johannes Lichtenberger
-   *
    */
-  public final class AVLNodeIterator extends AbstractIterator<AVLNode<K, V>> {
+  public final class AVLNodeIterator extends AbstractIterator<RBNode<K, V>> {
 
-    /** Determines if it's the first call. */
-    private boolean mFirst;
+    /**
+     * Determines if it's the first call.
+     */
+    private boolean first;
 
-    /** All AVLNode keys which are part of the result sequence. */
-    private final Deque<Long> mKeys;
+    /**
+     * All AVLNode keys which are part of the result sequence.
+     */
+    private final Deque<Long> keys;
 
-    /** Start node key. */
-    private final long mKey;
+    /**
+     * Start node key.
+     */
+    private final long key;
 
     /**
      * Constructor.
      *
      * @param nodeKey node key to start from, root node of AVLTree is selected if
-     *        {@code Fixed.DOCUMENT_NODE_KEY.getStandardProperty} is specified.
+     *                {@code Fixed.DOCUMENT_NODE_KEY.getStandardProperty} is specified.
      */
     public AVLNodeIterator(final long nodeKey) {
-      mFirst = true;
-      mKeys = new ArrayDeque<>();
+      first = true;
+      keys = new ArrayDeque<>();
       checkArgument(nodeKey >= 0, "nodeKey must be >= 0!");
-      mKey = nodeKey;
+      key = nodeKey;
     }
 
     @Override
-    protected AVLNode<K, V> computeNext() {
-      if (!mFirst) {
-        if (!mKeys.isEmpty()) {
+    protected RBNode<K, V> computeNext() {
+      if (!first) {
+        if (!keys.isEmpty()) {
           // Subsequent results.
-          final AVLNode<K, V> node = moveTo(mKeys.pop()).trx().getAVLNode();
+          final RBNode<K, V> node = moveTo(keys.pop()).trx().getCurrentAVLNode();
           stackOperation(node);
           return node;
         }
@@ -679,28 +794,28 @@ public final class AVLTreeReader<K extends Comparable<? super K>, V extends Refe
       }
 
       // First search.
-      mFirst = false;
-      boolean moved = moveTo(mKey).hasMoved();
-      if (mKey == Fixed.DOCUMENT_NODE_KEY.getStandardProperty()) {
+      first = false;
+      boolean moved = moveTo(key).hasMoved();
+      if (key == Fixed.DOCUMENT_NODE_KEY.getStandardProperty()) {
         moved = moveToFirstChild().hasMoved();
       }
       if (moved) {
-        final AVLNode<K, V> node = getAVLNode();
+        final RBNode<K, V> node = getCurrentAVLNode();
         stackOperation(node);
         return node;
       }
       return endOfData();
     }
 
-    private void stackOperation(final AVLNode<K, V> node) {
+    private void stackOperation(final RBNode<K, V> node) {
       if (node.hasRightChild()) {
-        final AVLNode<K, V> right = moveToLastChild().trx().getAVLNode();
-        mKeys.push(right.getNodeKey());
+        final RBNode<K, V> right = moveToLastChild().trx().getCurrentAVLNode();
+        keys.push(right.getNodeKey());
       }
       moveTo(node.getNodeKey());
       if (node.hasLeftChild()) {
-        final AVLNode<K, V> left = moveToFirstChild().trx().getAVLNode();
-        mKeys.push(left.getNodeKey());
+        final RBNode<K, V> left = moveToFirstChild().trx().getCurrentAVLNode();
+        keys.push(left.getNodeKey());
       }
     }
   }

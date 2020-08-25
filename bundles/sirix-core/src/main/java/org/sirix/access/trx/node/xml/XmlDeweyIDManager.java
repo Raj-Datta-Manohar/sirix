@@ -10,12 +10,11 @@ import org.sirix.node.interfaces.Node;
 import org.sirix.node.interfaces.StructNode;
 import org.sirix.node.xml.ElementNode;
 import org.sirix.page.PageKind;
-import org.sirix.page.UnorderedKeyValuePage;
 
 final class XmlDeweyIDManager extends AbstractDeweyIDManager {
   private final InternalXmlNodeTrx nodeTrx;
 
-  private final PageTrx<Long, DataRecord, UnorderedKeyValuePage> pageTrx;
+  private final PageTrx pageTrx;
 
   public XmlDeweyIDManager(InternalXmlNodeTrx nodeTrx) {
     super(nodeTrx);
@@ -42,8 +41,8 @@ final class XmlDeweyIDManager extends AbstractDeweyIDManager {
 
     final long nodeKey = nodeTrx.getNodeKey();
 
-    final StructNode root = (StructNode) nodeTrx.getPageWtx()
-                                                .prepareEntryForModification(nodeKey, PageKind.RECORDPAGE, -1);
+    final StructNode root = nodeTrx.getPageWtx()
+                                   .prepareRecordForModification(nodeKey, PageKind.RECORDPAGE, -1);
     root.setDeweyID(id);
 
     adaptNonStructuralNodes(root);
@@ -90,7 +89,7 @@ final class XmlDeweyIDManager extends AbstractDeweyIDManager {
           }
         }
 
-        final Node node = (Node) pageTrx.prepareEntryForModification(nodeTrx.getNodeKey(), PageKind.RECORDPAGE, -1);
+        final Node node = pageTrx.prepareRecordForModification(nodeTrx.getNodeKey(), PageKind.RECORDPAGE, -1);
         node.setDeweyID(deweyID);
 
         previousNodeKey = node.getNodeKey();
@@ -115,7 +114,7 @@ final class XmlDeweyIDManager extends AbstractDeweyIDManager {
         nodeTrx.moveToParent();
         nodeTrx.moveToAttribute(i);
 
-        final Node node = (Node) pageTrx.prepareEntryForModification(nodeTrx.getNodeKey(), PageKind.RECORDPAGE, -1);
+        final Node node = pageTrx.prepareRecordForModification(nodeTrx.getNodeKey(), PageKind.RECORDPAGE, -1);
         node.setDeweyID(deweyID);
 
         nodeTrx.moveToParent();
@@ -132,7 +131,7 @@ final class XmlDeweyIDManager extends AbstractDeweyIDManager {
         }
         nodeTrx.moveToNamespace(i);
 
-        final Node node = (Node) pageTrx.prepareEntryForModification(nodeTrx.getNodeKey(), PageKind.RECORDPAGE, -1);
+        final Node node = pageTrx.prepareRecordForModification(nodeTrx.getNodeKey(), PageKind.RECORDPAGE, -1);
         node.setDeweyID(deweyID);
 
         nodeTrx.moveToParent();

@@ -1,10 +1,10 @@
-package org.sirix.index.avltree;
+package org.sirix.index.redblacktree;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import org.brackit.xquery.atomic.QNm;
-import org.sirix.index.avltree.interfaces.MutableAVLNode;
-import org.sirix.index.avltree.keyvalue.CASValue;
+import org.sirix.index.redblacktree.interfaces.MutableRBNode;
+import org.sirix.index.redblacktree.keyvalue.CASValue;
 import org.sirix.node.AbstractForwardingNode;
 import org.sirix.node.NodeKind;
 import org.sirix.node.SirixDeweyID;
@@ -20,8 +20,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
  *
  * @author Johannes Lichtenberger
  */
-public final class AVLNode<K extends Comparable<? super K>, V> extends AbstractForwardingNode
-    implements MutableAVLNode<K, V> {
+public final class RBNode<K extends Comparable<? super K>, V> extends AbstractForwardingNode
+    implements MutableRBNode<K, V> {
   /** Key token. */
   private K key;
 
@@ -40,6 +40,12 @@ public final class AVLNode<K extends Comparable<? super K>, V> extends AbstractF
   /** {@link NodeDelegate} reference. */
   private NodeDelegate nodeDelegate;
 
+  private RBNode<K,V> parent;
+
+  private RBNode<K,V> leftChild;
+
+  private RBNode<K,V> rightChild;
+
   /**
    * Constructor.
    *
@@ -47,7 +53,7 @@ public final class AVLNode<K extends Comparable<? super K>, V> extends AbstractF
    * @param value the value
    * @param nodeDelegate the used node delegate
    */
-  public AVLNode(final K key, final V value, final NodeDelegate nodeDelegate) {
+  public RBNode(final K key, final V value, final NodeDelegate nodeDelegate) {
     this.key = checkNotNull(key);
     this.value = checkNotNull(value);
     this.nodeDelegate = checkNotNull(nodeDelegate);
@@ -56,13 +62,13 @@ public final class AVLNode<K extends Comparable<? super K>, V> extends AbstractF
   @Override
   public NodeKind getKind() {
     if (key instanceof Long) {
-      return NodeKind.PATHAVL;
+      return NodeKind.PATHRB;
     }
     if (key instanceof CASValue) {
-      return NodeKind.CASAVL;
+      return NodeKind.CASRB;
     }
     if (key instanceof QNm) {
-      return NodeKind.NAMEAVL;
+      return NodeKind.NAMERB;
     }
     return NodeKind.UNKNOWN;
   }
@@ -117,6 +123,30 @@ public final class AVLNode<K extends Comparable<? super K>, V> extends AbstractF
     return right;
   }
 
+  public RBNode<K, V> getParent() {
+    return parent;
+  }
+
+  public RBNode<K, V> getLeftChild() {
+    return leftChild;
+  }
+
+  public RBNode<K, V> getRightChild() {
+    return rightChild;
+  }
+
+  public void setLeftChild(RBNode<K, V> leftChild) {
+    this.leftChild = leftChild;
+  }
+
+  public void setRightChild(RBNode<K, V> rightChild) {
+    this.rightChild = rightChild;
+  }
+
+  public void setParent(RBNode<K, V> parent) {
+    this.parent = parent;
+  }
+
   @Override
   public void setLeftChildKey(final long left) {
     this.left = left;
@@ -134,9 +164,9 @@ public final class AVLNode<K extends Comparable<? super K>, V> extends AbstractF
 
   @Override
   public boolean equals(final @Nullable Object obj) {
-    if (obj instanceof AVLNode) {
+    if (obj instanceof RBNode) {
       @SuppressWarnings("unchecked")
-      final AVLNode<K, V> other = (AVLNode<K, V>) obj;
+      final RBNode<K, V> other = (RBNode<K, V>) obj;
       return this.nodeDelegate.getNodeKey() == other.nodeDelegate.getNodeKey();
     }
     return false;

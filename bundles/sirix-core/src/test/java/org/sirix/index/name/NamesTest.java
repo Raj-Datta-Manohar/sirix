@@ -11,14 +11,12 @@ import org.junit.Test;
 import org.sirix.api.PageTrx;
 import org.sirix.node.HashCountEntryNode;
 import org.sirix.node.HashEntryNode;
-import org.sirix.node.interfaces.DataRecord;
 import org.sirix.page.PageKind;
-import org.sirix.page.UnorderedKeyValuePage;
 
 public final class NamesTest {
   @Test
   public void whenIndexExistsForAnotherString_createNewIndex() {
-    final PageTrx<Long, DataRecord, UnorderedKeyValuePage> pageTrx = createPageTrxMock("FB");
+    final PageTrx pageTrx = createPageTrxMock("FB");
 
     final var names = Names.getInstance(0);
 
@@ -28,23 +26,23 @@ public final class NamesTest {
     assertNotEquals(fbIndex, EaIndex);
   }
 
-  private PageTrx<Long, DataRecord, UnorderedKeyValuePage> createPageTrxMock(String name) {
+  private PageTrx createPageTrxMock(String name) {
     final var hashEntryNode = new HashEntryNode(2, 12, name);
     final var hashCountEntryNode = new HashCountEntryNode(3, 1);
 
     @SuppressWarnings("unchecked")
-    final PageTrx<Long, DataRecord, UnorderedKeyValuePage> pageTrx = mock(PageTrx.class);
-    when(pageTrx.createEntry(anyLong(), any(HashEntryNode.class), eq(PageKind.NAMEPAGE), eq(0))).thenReturn(
+    final PageTrx pageTrx = mock(PageTrx.class);
+    when(pageTrx.createRecord(anyLong(), any(HashEntryNode.class), eq(PageKind.NAMEPAGE), eq(0))).thenReturn(
         hashEntryNode);
-    when(pageTrx.createEntry(anyLong(), any(HashCountEntryNode.class), eq(PageKind.NAMEPAGE), eq(0))).thenReturn(
+    when(pageTrx.createRecord(anyLong(), any(HashCountEntryNode.class), eq(PageKind.NAMEPAGE), eq(0))).thenReturn(
         hashCountEntryNode);
-    when(pageTrx.prepareEntryForModification(2L, PageKind.NAMEPAGE, 0)).thenReturn(hashCountEntryNode);
+    when(pageTrx.prepareRecordForModification(2L, PageKind.NAMEPAGE, 0)).thenReturn(hashCountEntryNode);
     return pageTrx;
   }
 
   @Test
   public void whenIndexExistsForSameString_createNoNewIndex() {
-    final PageTrx<Long, DataRecord, UnorderedKeyValuePage> pageTrx = createPageTrxMock("FB");
+    final PageTrx pageTrx = createPageTrxMock("FB");
 
     final var names = Names.getInstance(0);
 
@@ -56,7 +54,7 @@ public final class NamesTest {
 
   @Test
   public void whenIndexExistsForSameString_increaseCounter() {
-    final PageTrx<Long, DataRecord, UnorderedKeyValuePage> pageTrx = createPageTrxMock("FB");
+    final PageTrx pageTrx = createPageTrxMock("FB");
 
     final var names = Names.getInstance(0);
 
@@ -77,12 +75,10 @@ public final class NamesTest {
   public void whenNameIsSet_getNameReturnsName() {
     final var testName = "FB";
 
-    final PageTrx<Long, DataRecord, UnorderedKeyValuePage> pageTrx = createPageTrxMock(testName);
+    final PageTrx pageTrx = createPageTrxMock(testName);
 
     final var names = Names.getInstance(0);
-
     final var index = names.setName(testName, pageTrx);
-
     final var name = names.getName(index);
 
     assertEquals(testName, name);
