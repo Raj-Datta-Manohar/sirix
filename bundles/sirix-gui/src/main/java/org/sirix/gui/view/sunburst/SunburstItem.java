@@ -28,7 +28,6 @@
 package org.sirix.gui.view.sunburst;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -37,13 +36,13 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Stack;
 
-import javax.annotation.Nonnegative;
-import javax.annotation.Nonnull;
+import org.checkerframework.checker.index.qual.NonNegative;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import javax.xml.namespace.QName;
 import javax.xml.stream.events.Attribute;
 import javax.xml.stream.events.Namespace;
 
-import org.brackit.xquery.atomic.QNm;
+import io.brackit.query.atomic.QNm;
 import org.gicentre.utils.move.Ease;
 import org.sirix.access.Utils;
 import org.sirix.diff.DiffFactory.DiffType;
@@ -288,10 +287,10 @@ public final class SunburstItem implements VisualItem {
 		 * @param pGUI
 		 *          GUI which extends {@link AbstractSunburstGUI}
 		 */
-		public Builder(final PApplet pApplet, @Nonnegative final float pAngleStart,
-				@Nonnegative final float pExtension,
-				@Nonnull final NodeRelations pRelations, @Nonnull final ReadDB pReadDB,
-				@Nonnull final AbstractSunburstGUI pGUI) {
+		public Builder(final PApplet pApplet, @NonNegative final float pAngleStart,
+				@NonNegative final float pExtension,
+				@NonNull final NodeRelations pRelations, @NonNull final ReadDB pReadDB,
+				@NonNull final AbstractSunburstGUI pGUI) {
 			mParent = pApplet;
 			mAngleStart = pAngleStart;
 			mExtension = pExtension;
@@ -307,7 +306,7 @@ public final class SunburstItem implements VisualItem {
 		 * 
 		 * @return this builder
 		 */
-		public Builder setModifications(@Nonnegative final int pModifications) {
+		public Builder setModifications(@NonNegative final int pModifications) {
 			checkArgument(pModifications >= 0, "pModifications must be >= 0!");
 			mModifications = pModifications;
 			return this;
@@ -356,7 +355,7 @@ public final class SunburstItem implements VisualItem {
 		 *          node key
 		 * @return this builder
 		 */
-		public Builder setNodeKey(final @Nonnegative long pNodeKey) {
+		public Builder setNodeKey(final @NonNegative long pNodeKey) {
 			checkArgument(pNodeKey >= 0, "node key must be >= 0!");
 			mNodeKey = pNodeKey;
 			return this;
@@ -369,7 +368,7 @@ public final class SunburstItem implements VisualItem {
 		 *          node kind
 		 * @return this builder
 		 */
-		public Builder setKind(final @Nonnegative Kind pKind) {
+		public Builder setKind(final @NonNegative Kind pKind) {
 			mKind = checkNotNull(pKind);
 			return this;
 		}
@@ -429,7 +428,7 @@ public final class SunburstItem implements VisualItem {
 		 *          node key
 		 * @return this builder
 		 */
-		public Builder setOldKey(@Nonnegative long pNodeKey) {
+		public Builder setOldKey(@NonNegative long pNodeKey) {
 			checkArgument(pNodeKey >= 0, "old nodeKey must be >= 0!");
 			mOldKey = pNodeKey;
 			return this;
@@ -570,7 +569,7 @@ public final class SunburstItem implements VisualItem {
 	 * @param pRevision
 	 *          revision to set
 	 */
-	public void setRevision(@Nonnegative final long pRevision) {
+	public void setRevision(@NonNegative final long pRevision) {
 		checkArgument(pRevision >= 0, "paramRevision must be >= 0!");
 		mRevision = pRevision;
 	}
@@ -598,8 +597,8 @@ public final class SunburstItem implements VisualItem {
 	 *           if {@code pGraphic} is null
 	 */
 	@Override
-	public void update(final Draw pDraw, @Nonnegative final int pMappingMode,
-			@Nonnull final PGraphics pGraphic) {
+	public void update(final Draw pDraw, @NonNegative final int pMappingMode,
+			@NonNull final PGraphics pGraphic) {
 		checkArgument(pMappingMode == 1 || pMappingMode == 2 || pMappingMode == 3);
 		checkNotNull(pGraphic);
 		mGraphic = pGraphic;
@@ -766,8 +765,8 @@ public final class SunburstItem implements VisualItem {
 	 * @param pHover
 	 *          determines if item currently is hovered or not
 	 */
-	void drawArc(@Nonnegative final float pInnerNodeScale,
-			@Nonnegative final float pLeafScale, @Nonnull final EHover pHover) {
+	void drawArc(@NonNegative final float pInnerNodeScale,
+			@NonNegative final float pLeafScale, @NonNull final EHover pHover) {
 		checkArgument(pInnerNodeScale >= 0f, "innernode arc scale must be >= 0!");
 		checkArgument(pLeafScale >= 0f, "leaf scale must be >= 0!");
 		checkNotNull(pHover);
@@ -849,7 +848,7 @@ public final class SunburstItem implements VisualItem {
 	 * @param pW
 	 *          width of ellipse
 	 */
-	private void drawArc(final PGraphics pGraphic, @Nonnegative final float pW) {
+	private void drawArc(final PGraphics pGraphic, @NonNegative final float pW) {
 		assert pGraphic != null;
 		assert pW >= 0f;
 		pGraphic.pushMatrix();
@@ -870,8 +869,8 @@ public final class SunburstItem implements VisualItem {
 	 * @param pHover
 	 *          determines if item currently is hovered or not
 	 */
-	void drawRect(@Nonnegative final float pInnerNodeScale,
-			@Nonnegative final float pLeafScale, @Nonnull final EHover pHover) {
+	void drawRect(@NonNegative final float pInnerNodeScale,
+			@NonNegative final float pLeafScale, @NonNull final EHover pHover) {
 		float rectWidth;
 		switch (mStructKind) {
 		case ISLEAFNODE:
@@ -1844,7 +1843,7 @@ public final class SunburstItem implements VisualItem {
 	 * @param pDepth
 	 *          original depth
 	 */
-	public void setOriginalDepth(@Nonnegative final int pDepth) {
+	public void setOriginalDepth(@NonNegative final int pDepth) {
 		checkArgument(pDepth >= 0, "pDepth must be >= 0!");
 		mOrigDepth = pDepth;
 		mTmpDepth = mOrigDepth;
@@ -1856,7 +1855,7 @@ public final class SunburstItem implements VisualItem {
 	 * @param pDepth
 	 *          new depth
 	 */
-	public void setTempDepth(final @Nonnegative int pDepth) {
+	public void setTempDepth(final @NonNegative int pDepth) {
 		checkArgument(pDepth >= 0, "pDepth must be >= 0!");
 		mTmpDepth = pDepth;
 	}

@@ -1,12 +1,11 @@
 buildscript {
     repositories {
         mavenCentral()
-        jcenter()
     }
 
     dependencies {
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.4.0"
-        classpath "com.avast.gradle:gradle-docker-compose-plugin:0.13.2"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.21"
+        classpath "com.avast.gradle:gradle-docker-compose-plugin:0.17.12"
         //classpath "org.jetbrains.dokka:dokka-gradle-plugin:0.10.0"
     }
 }
@@ -21,7 +20,8 @@ apply plugin: 'docker-compose'
 
 dependencies {
     implementation project(':sirix-core')
-    implementation project(':sirix-xquery')
+    implementation project(':sirix-query')
+    testImplementation project(':sirix-core').sourceSets.test.output
 
     implementation implLibraries.kotlinStdlib
     implementation implLibraries.kotlinxCoroutinesCore
@@ -34,17 +34,19 @@ dependencies {
     implementation implLibraries.vertxConfig
     implementation implLibraries.kotlinStdlibJdk8
     implementation implLibraries.jsoup
-
     testImplementation testLibraries.kotlinTestJunit
     testImplementation testLibraries.junit
     testImplementation testLibraries.vertxJunit5
     testImplementation testLibraries.jsonassert
+
 }
+
+
 
 description = 'Non-blocking REST-API for SirixDB.'
 
 shadowJar {
-    classifier = 'fat'
+    archiveClassifier = 'fat'
     manifest {
         inheritFrom project.tasks.jar.manifest
     }
@@ -53,22 +55,10 @@ shadowJar {
 
 jar {
 	manifest {
-		attributes('Main-Verticle': 'org.sirix.rest.SirixVerticle',
+		attributes('Main-Verticle': 'io.sirix.rest.SirixVerticle',
 				   'Main-Class': 'io.vertx.core.Launcher')
 	}
     finalizedBy shadowJar
-}
-
-compileKotlin {
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
-}
-
-compileTestKotlin {
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
 }
 
 test {
@@ -80,6 +70,7 @@ task copyCertificates(type: Copy) {
     include '*.pem'
     into file("$buildDir/sirix-data")
 }
+copyCertificates.dependsOn(processResources)
 
 /*
 task dokkaJavadoc(type: org.jetbrains.dokka.gradle.DokkaTask) {
@@ -93,6 +84,8 @@ task dokkaJavadoc(type: org.jetbrains.dokka.gradle.DokkaTask) {
 
 javadocJar.dependsOn dokkaJavadoc*/
 
+dockerCompose.isRequiredBy(test)
+
 test.dependsOn copyCertificates
 test.dependsOn composeUp
 test.finalizedBy composeDownForced
@@ -100,7 +93,10 @@ test.finalizedBy composeDownForced
 dockerCompose {
     useComposeFiles = ["${projectDir}/src/test/resources/docker-compose.yml"]
 
-    removeImages = "None" // Other accepted values are: "All" and "Local"
+   // removeImages = "com.avast.gradle.dockercompose.RemoveImages.None" // Other accepted values are: "All" and "Local"
+
+    composeLogToFile = project.file('sirix-logs.txt') // redirect output of composeUp and composeDown tasks to this file; default is null (ouput is not redirected)
+    containerLogToDir = project.file('logs') // directory where composeLogs task stores output of the containers; default: build/containers-logs
 
     projectName = 'sirix-test'
 }

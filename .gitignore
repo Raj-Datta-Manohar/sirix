@@ -22,6 +22,8 @@ out/
 *.project
 *.classpath
 
+# Visual Studio Code files 
+settings.json
 # Java classfiles
 *.class
 
@@ -40,3 +42,10 @@ build/
 sirix-performance
 bundles/sirix-rest-api/.idea/vcs.xml
 bundles/sirix-rest-api/.idea/compiler.xml
+/bundles/sirix-kotlin-api/logs/sirix.log
+/bundles/sirix-query/zgc-generational-insert.log
+/bundles/sirix-kotlin-cli/zgc-generational-insert.log
+/bundles/sirix-kotlin-api/zgc-generational-insert.log
+/bundles/sirix-rest-api/zgc-generational-insert.log
+/bundles/sirix-core/zgc-generational-insert.log
+/bundles/sirix-core/src/test/resources/json/cityofchicago.json

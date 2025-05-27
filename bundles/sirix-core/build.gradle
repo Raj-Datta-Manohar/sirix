@@ -7,18 +7,26 @@ dependencies {
     api implLibraries.xmlunit
     api implLibraries.logbackClassic
     api implLibraries.logbackCore
-    api implLibraries.guice
     api implLibraries.gson
     api implLibraries.guava
     api implLibraries.guavaTestlib
-    api implLibraries.jsr305
+    api implLibraries.checkerFramework
     api implLibraries.caffeine
     api implLibraries.tink
+    api implLibraries.dagger
+    api implLibraries.fastUtil
+    api implLibraries.iouring
+    api implLibraries.lz4
+    api implLibraries.roaringbitmap
 
     implementation implLibraries.snappyJava
     implementation implLibraries.browniesCollections
-    implementation implLibraries.chronicleMap
     implementation implLibraries.integercompression
+    implementation implLibraries.chronicleBytes
+    implementation implLibraries.fastObjectPool
+    implementation implLibraries.zeroAllocationHashing
+
+    annotationProcessor implLibraries.daggerCompiler
 
     testImplementation testLibraries.junitJupiterApi
     testImplementation testLibraries.junitJupiterEngine
@@ -26,18 +34,24 @@ dependencies {
     testImplementation testLibraries.junitPlatformLauncher
     testImplementation testLibraries.junitPlatformRunner
     testImplementation testLibraries.mockitoCore
+    testImplementation testLibraries.byteBuddy
     testImplementation testLibraries.testng
     testImplementation testLibraries.jsonassert
     testImplementation testLibraries.commonsCollections4
     testImplementation testLibraries.commonsCollections4Tests
+    testImplementation testLibraries.assertjCore
 }
 
 description = 'SirixDB is a hybrid on-disk and in-memory document oriented, versioned database system. It has a ' +
-        'lightweight buffer manager, stores everything in a huge persistent and durabel tree and allows efficient ' +
-        'reconstruction of every revision. Furthermore SirixDB implements change tracking, diffing and time travel queries.'
+        'lightweight buffer manager, stores everything in a huge persistent and durable tree and allows efficient ' +
+        'reconstruction of every revision. Furthermore, SirixDB implements change tracking, diffing and supports time travel queries.'
 
 jar {
     manifest {
         attributes('Main-Class': 'org.sirix.utils.CommandoLineExplorer')
     }
+}
+
+test {
+    useJUnitPlatform()
 }

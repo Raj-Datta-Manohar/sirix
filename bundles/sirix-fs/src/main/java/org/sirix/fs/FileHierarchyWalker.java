@@ -1,6 +1,5 @@
 package org.sirix.fs;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
@@ -8,7 +7,7 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Map;
-import javax.annotation.Nonnull;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.sirix.api.Database;
 import org.sirix.api.xml.XmlResourceManager;
 import org.sirix.api.xml.XmlNodeTrx;
@@ -23,7 +22,7 @@ import com.google.common.base.Optional;
  * @author Johannes Lichtenberger, University of Konstanz
  *
  */
-@Nonnull
+@NonNull
 public class FileHierarchyWalker {
 
   /**
@@ -38,9 +37,9 @@ public class FileHierarchyWalker {
    */
   public static Map<Path, org.sirix.fs.FileSystemPath> parseDir(final Path path,
       final Database<XmlResourceManager> database, Optional<Visitor<XmlNodeTrx>> visitor) throws IOException {
-    checkNotNull(visitor);
-    checkNotNull(path);
-    try (final XmlResourceManager resource = checkNotNull(database).openResourceManager("shredded");
+    requireNonNull(visitor);
+    requireNonNull(path);
+    try (final XmlResourceManager resource = requireNonNull(database).openResourceManager("shredded");
         final XmlNodeTrx wtx = resource.beginNodeTrx()) {
       final Builder builder = new Builder(wtx);
       if (visitor.isPresent()) {

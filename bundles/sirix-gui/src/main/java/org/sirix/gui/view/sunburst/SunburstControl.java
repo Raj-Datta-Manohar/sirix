@@ -27,12 +27,12 @@
 package org.sirix.gui.view.sunburst;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNUll;
 
 import java.awt.event.MouseEvent;
 import java.util.List;
 
-import javax.annotation.Nonnegative;
+import org.checkerframework.checker.index.qual.NonNegative;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import javax.xml.stream.FactoryConfigurationError;
@@ -128,8 +128,8 @@ public final class SunburstControl extends AbstractSunburstControl {
 			final Embedded pParent,
 			final Model<SunburstContainer, SunburstItem> pModel, final ReadDB pDb) {
 		if (mControl == null) {
-			mControl = new SunburstControl(checkNotNull(pParent),
-					checkNotNull(pModel), checkNotNull(pDb));
+			mControl = new SunburstControl(requireNonNull(pParent),
+			                               requireNonNull(pModel), requireNonNull(pDb));
 		}
 		return mControl;
 	}
@@ -406,7 +406,7 @@ public final class SunburstControl extends AbstractSunburstControl {
 	 *          index of the new root item
 	 */
 	private void refreshed(final SunburstContainer pContainer,
-			@Nonnegative final int pIndex) {
+			@NonNegative final int pIndex) {
 		assert pContainer != null;
 		assert pIndex >= 0;
 		if (mRefresh || pContainer.getPruning() == Pruning.ITEMSIZE
@@ -507,7 +507,7 @@ public final class SunburstControl extends AbstractSunburstControl {
 	 *           if the XML fragment isn't well formed
 	 */
 	@Override
-	public void commit(@Nonnegative final int pValue) throws XMLStreamException {
+	public void commit(@NonNegative final int pValue) throws XMLStreamException {
 		try {
 			assert mModel instanceof SunburstModel;
 			mSunburstGUI.mCtrl.setVisible(false);

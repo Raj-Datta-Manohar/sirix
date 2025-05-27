@@ -2,9 +2,9 @@ package io.sirix.tutorial.xml;
 
 import java.nio.file.Files;
 
-import org.sirix.access.DatabaseConfiguration;
-import org.sirix.access.Databases;
-import org.sirix.access.ResourceConfiguration;
+import io.sirix.access.DatabaseConfiguration;
+import io.sirix.access.Databases;
+import io.sirix.access.ResourceConfiguration;
 
 import io.sirix.tutorial.Constants;
 
@@ -28,7 +28,7 @@ public final class CreateVersionedXmlResource {
                                                          .useTextCompression(false)
                                                          .useDeweyIDs(true)
                                                          .build());
-            try (final var manager = database.openResourceManager(resource);
+            try (final var manager = database.beginResourceSession(resource);
                  final var wtx = manager.beginNodeTrx()) {
                 XmlDocumentCreator.createVersioned(wtx);
             }

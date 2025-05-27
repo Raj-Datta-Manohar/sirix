@@ -27,7 +27,6 @@
 package org.sirix.gui.view.model;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,9 +40,9 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.annotation.Nonnegative;
-import javax.annotation.Nonnull;
-import org.brackit.xquery.update.Insert;
+import org.checkerframework.checker.index.qual.NonNegative;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import io.brackit.query.update.Insert;
 import org.sirix.api.NodeReadTrx;
 import org.sirix.api.xml.XmlNodeReadOnlyTrx;
 import org.sirix.api.xml.XmlResourceManager;
@@ -76,7 +75,7 @@ import processing.core.PApplet;
  * @param <T> type of {@link VisualItem}s
  *
  */
-@Nonnull
+@NonNull
 public abstract class AbstractModel<S, T extends VisualItem> extends AbstractObservableComponent
     implements Model<S, T> {
 
@@ -104,10 +103,10 @@ public abstract class AbstractModel<S, T extends VisualItem> extends AbstractObs
   protected transient Deque<Integer> mLastOldDepths;
 
   /** The last maximum depth. */
-  protected transient @Nonnegative int mLastMaxDepth;
+  protected transient @NonNegative int mLastMaxDepth;
 
   /** The last maximum depth in the old revision. */
-  protected transient @Nonnegative int mLastOldMaxDepth;
+  protected transient @NonNegative int mLastOldMaxDepth;
 
   /**
    * Determines if XML fragments should be inserted as first child or as right sibling of the current
@@ -130,7 +129,7 @@ public abstract class AbstractModel<S, T extends VisualItem> extends AbstractObs
    * @param pApplet the processing {@link PApplet} core library
    * @param pDb {@link ReadDB} reference
    */
-  protected AbstractModel(final PApplet pApplet, @Nonnull final ReadDB pDb) {
+  protected AbstractModel(final PApplet pApplet, @NonNull final ReadDB pDb) {
     checkNotNull(pApplet);
     checkNotNull(pDb);
     mParent = pApplet;
@@ -158,7 +157,7 @@ public abstract class AbstractModel<S, T extends VisualItem> extends AbstractObs
   }
 
   @Override
-  public final void updateDb(final ReadDB pDb, @Nonnull final Container<S> pContainer) {
+  public final void updateDb(final ReadDB pDb, @NonNull final Container<S> pContainer) {
     checkNotNull(pDb);
     checkNotNull(pContainer);
     setDb(pDb);

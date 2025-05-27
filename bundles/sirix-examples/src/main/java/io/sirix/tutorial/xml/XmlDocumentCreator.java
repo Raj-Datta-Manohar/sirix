@@ -21,17 +21,13 @@
 
 package io.sirix.tutorial.xml;
 
-import java.io.IOException;
-
-import javax.xml.stream.XMLStreamException;
-
-import org.brackit.xquery.atomic.QNm;
-import org.sirix.api.Database;
-import org.sirix.api.xml.XmlNodeTrx;
-import org.sirix.api.xml.XmlResourceManager;
-import org.sirix.exception.SirixException;
-import org.sirix.service.xml.shredder.InsertPosition;
-import org.sirix.service.xml.shredder.XmlShredder;
+import io.brackit.query.atomic.QNm;
+import io.sirix.api.Database;
+import io.sirix.api.xml.XmlNodeTrx;
+import io.sirix.api.xml.XmlResourceSession;
+import io.sirix.exception.SirixException;
+import io.sirix.service.InsertPosition;
+import io.sirix.service.xml.shredder.XmlShredder;
 
 /**
  *
@@ -221,7 +217,7 @@ public final class XmlDocumentCreator {
 
     wtx.insertElementAsFirstChild(new QNm("c"));
     wtx.insertTextAsRightSibling("bar");
-    wtx.moveToParent().hasMoved();
+    wtx.moveToParent();
 
     wtx.insertTextAsRightSibling("oops3");
 
@@ -264,7 +260,9 @@ public final class XmlDocumentCreator {
       wtx.commit();
     }
 
-    wtx.moveToDocumentRoot().trx().moveToFirstChild().trx().moveToLastChild().trx();
+    wtx.moveToDocumentRoot();
+    wtx.moveToFirstChild();
+    wtx.moveToLastChild();
     wtx.remove();
     wtx.commit();
 
@@ -326,12 +324,12 @@ public final class XmlDocumentCreator {
 
   /**
    * Create revisioned document.
-   *
+   * @param database the database to create the revisioned document from
    * @throws SirixException if shredding fails
    */
-  public static void createRevisioned(final Database<XmlResourceManager> database) {
+  public static void createRevisioned(final Database<XmlResourceSession> database) {
 
-    try (final XmlResourceManager resMgr = database.openResourceManager("resource")) {
+    try (final XmlResourceSession resMgr = database.beginResourceSession("resource")) {
       try (final XmlNodeTrx firstWtx = resMgr.beginNodeTrx()) {
         final XmlShredder shredder = new XmlShredder.Builder(firstWtx, XmlShredder.createStringReader(REVXML),
             InsertPosition.AS_FIRST_CHILD).commitAfterwards().build();

@@ -1,7 +1,7 @@
 {
   "metadata": {
     "nodeKey": 1,
-    "hash": "3a442e106dee0fbb07745d5b7099963a",
+    "hash": "0000000000000000",
     "type": "ARRAY",
     "descendantCount": 14,
     "childCount": 2
@@ -10,7 +10,7 @@
     {
       "metadata": {
         "nodeKey": 2,
-        "hash": "da89c389c7a3a83cbc3b98c68e4b1d2f",
+        "hash": "0000000000000000",
         "type": "OBJECT",
         "descendantCount": 8,
         "childCount": 1
@@ -20,14 +20,14 @@
           "key": "head",
           "metadata": {
             "nodeKey": 3,
-            "hash": "da856519d4c35292693d1365e55705a5",
+            "hash": "0000000000000000",
             "type": "OBJECT_KEY",
             "descendantCount": 7
           },
           "value": {
             "metadata": {
               "nodeKey": 4,
-              "hash": "bf4192fcdb687caace9f2055ff30202f",
+              "hash": "0000000000000000",
               "type": "OBJECT",
               "descendantCount": 6,
               "childCount": 2
@@ -40,7 +40,7 @@
     {
       "metadata": {
         "nodeKey": 11,
-        "hash": "c7db9f40926135b7d9c76774fecf9e20",
+        "hash": "0000000000000000",
         "type": "OBJECT",
         "descendantCount": 4,
         "childCount": 1

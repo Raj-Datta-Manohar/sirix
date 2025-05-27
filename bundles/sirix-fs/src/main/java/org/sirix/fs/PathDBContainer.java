@@ -1,8 +1,7 @@
 package org.sirix.fs;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import java.nio.file.Path;
-import javax.annotation.Nonnull;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.sirix.api.Database;
 import org.sirix.api.ResourceManager;
 
@@ -15,7 +14,7 @@ import org.sirix.api.ResourceManager;
  * @author Johannes Lichtenberger, University of Konstanz
  *
  */
-@Nonnull
+@NonNull
 public final class PathDBContainer {
   /** Save the hashcode (lazy initialized). */
   private int mHashCode;
@@ -33,8 +32,8 @@ public final class PathDBContainer {
    * @param pDatabase sirix {@link Database} reference
    */
   public PathDBContainer(final Path pPath, final Database pDatabase) {
-    mPath = checkNotNull(pPath);
-    mDatabase = checkNotNull(pDatabase);
+    mPath = requireNonNull(pPath);
+    mDatabase = requireNonNull(pDatabase);
   }
 
   @Override

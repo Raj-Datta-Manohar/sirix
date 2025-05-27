@@ -2,14 +2,14 @@
   "key": "tada",
   "metadata": {
     "nodeKey": 15,
-    "hash": "54cd18f41e0a9030143cc737cf5af063",
+    "hash": "0000000000000000",
     "type": "OBJECT_KEY",
     "descendantCount": 10
   },
   "value": {
     "metadata": {
       "nodeKey": 16,
-      "hash": "5a2084c5948a8239e825b5b72fb9cecf",
+      "hash": "0000000000000000",
       "type": "ARRAY",
       "descendantCount": 9,
       "childCount": 5
@@ -18,7 +18,7 @@
       {
         "metadata": {
           "nodeKey": 17,
-          "hash": "daa08cd06b2a799e6c0c0b7e251ffb2f",
+          "hash": "0000000000000000",
           "type": "OBJECT",
           "descendantCount": 2,
           "childCount": 1
@@ -28,14 +28,14 @@
             "key": "foo",
             "metadata": {
               "nodeKey": 18,
-              "hash": "9c8fa54d53e543707282a1294ce4d01b",
+              "hash": "0000000000000000",
               "type": "OBJECT_KEY",
               "descendantCount": 1
             },
             "value": {
               "metadata": {
                 "nodeKey": 19,
-                "hash": "4c772851035e6828f20796d39756e38d",
+                "hash": "0000000000000000",
                 "type": "OBJECT_STRING_VALUE"
               },
               "value": "bar"
@@ -46,7 +46,7 @@
       {
         "metadata": {
           "nodeKey": 20,
-          "hash": "7de22f5b0173fc684fe4aecc7ae5c6f7",
+          "hash": "0000000000000000",
           "type": "OBJECT",
           "descendantCount": 2,
           "childCount": 1
@@ -56,14 +56,14 @@
             "key": "baz",
             "metadata": {
               "nodeKey": 21,
-              "hash": "bbff8b33370fa4bf464f60b884d9380c",
+              "hash": "0000000000000000",
               "type": "OBJECT_KEY",
               "descendantCount": 1
             },
             "value": {
               "metadata": {
                 "nodeKey": 22,
-                "hash": "b6690120faf731eff68ffdc96b853297",
+                "hash": "0000000000000000",
                 "type": "OBJECT_BOOLEAN_VALUE"
               },
               "value": false
@@ -74,7 +74,7 @@
       {
         "metadata": {
           "nodeKey": 23,
-          "hash": "33e7b88d4757899d04c456ca44843626",
+          "hash": "0000000000000000",
           "type": "STRING_VALUE"
         },
         "value": "boo"
@@ -82,7 +82,7 @@
       {
         "metadata": {
           "nodeKey": 24,
-          "hash": "05391b8ae48f84fcdea8fd88b9cab9d2",
+          "hash": "0000000000000000",
           "type": "OBJECT",
           "descendantCount": 0,
           "childCount": 0
@@ -92,7 +92,7 @@
       {
         "metadata": {
           "nodeKey": 25,
-          "hash": "f454fb7db6c66c190477af8942aeee19",
+          "hash": "0000000000000000",
           "type": "ARRAY",
           "descendantCount": 0,
           "childCount": 0

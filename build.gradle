@@ -1,21 +1,36 @@
-apply from: "${rootDir}/libraries.gradle"
+import org.jetbrains.kotlin.gradle.dsl.jvm.JvmTargetValidationMode
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 buildscript {
-    ext.kotlin_version = '1.4.0'
+    ext.kotlin_version = '2.1.21'
     repositories {
         maven {
             url "https://plugins.gradle.org/m2/"
         }
     }
     dependencies {
-        classpath "gradle.plugin.org.kt3k.gradle.plugin:coveralls-gradle-plugin:2.10.2"
-        classpath 'net.researchgate:gradle-release:2.8.1'
-        classpath "com.github.ben-manes:gradle-versions-plugin:0.27.0"
-        classpath "com.github.jengelman.gradle.plugins:shadow:5.2.0"
-        classpath "com.diffplug.spotless:spotless-plugin-gradle:5.3.0"
+        classpath "gradle.plugin.org.kt3k.gradle.plugin:coveralls-gradle-plugin:2.12.2"
+        classpath 'net.researchgate:gradle-release:3.1.0'
+        classpath "com.github.ben-manes:gradle-versions-plugin:0.51.0"
+        classpath "gradle.plugin.com.github.jengelman.gradle.plugins:shadow:7.0.0"
+        classpath "com.diffplug.spotless:spotless-plugin-gradle:7.0.3"
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
+
+plugins {
+    id "org.sonarqube" version "6.2.0.5505"
+}
+
+sonarqube {
+    properties {
+        property "sonar.projectKey", "sirixdb_sirix"
+        property "sonar.organization", "sirixdb"
+        property "sonar.host.url", "https://sonarcloud.io"
+    }
+}
+
+apply from: "${rootDir}/libraries.gradle"
 
 apply plugin: 'net.researchgate.release'
 
@@ -23,6 +38,10 @@ release {
     failOnSnapshotDependencies = false
     tagTemplate = 'sirix-$version'
     buildTasks = ['releaseBuild']
+}
+
+tasks.withType(KotlinJvmCompile).configureEach {
+    jvmTargetValidationMode.set(JvmTargetValidationMode.WARNING)
 }
 
 task releaseBuild {
@@ -38,9 +57,7 @@ task uploadPublications {
 }
 
 task travisReleaseSnapshot {
-    if ("${version}".endsWith('SNAPSHOT') &&
-            System.getenv("TRAVIS_PULL_REQUEST") == "false" &&
-            System.getenv("TRAVIS_BRANCH") == "master") {
+    if ("${version}".endsWith('SNAPSHOT')) {
         dependsOn uploadPublications
     }
 }
@@ -50,7 +67,7 @@ afterReleaseBuild.dependsOn(uploadPublications)
 allprojects {
     group = 'io.sirix'
 
-    apply plugin: 'jacoco'
+//    apply plugin: 'jacoco'
     apply plugin: 'com.github.kt3k.coveralls'
     apply plugin: 'idea'
 
@@ -76,59 +93,93 @@ subprojects {
     apply plugin: "com.diffplug.spotless"
 
     java {
-        sourceCompatibility = JavaVersion.VERSION_14
-        targetCompatibility = JavaVersion.VERSION_14
         withSourcesJar()
         withJavadocJar()
-
-        if (JavaVersion.current() != targetCompatibility){
-            throw new GradleException("This build must be run with Java " + targetCompatibility.toString())
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(22)
         }
     }
+
 
     javadoc {
         failOnError = false
         options {
+            addStringOption('-release', '22')
             addBooleanOption('-enable-preview', true)
-            addStringOption('-release', '14')
-            addStringOption('-add-modules', 'jdk.incubator.foreign')
         }
     }
 
     compileJava {
-        options.compilerArgs += ["--enable-preview", "--add-modules=jdk.incubator.foreign"]
+        options.compilerArgs += ["--enable-preview",
+                                 "--add-exports=java.base/jdk.internal.ref=ALL-UNNAMED",
+                                 "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
+                                 "--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED",
+                                 "--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED",
+                                 "--add-exports=java.base/java.lang.reflect=ALL-UNNAMED"]
     }
 
     compileTestJava {
-        options.compilerArgs += ["--enable-preview", "--add-modules=jdk.incubator.foreign"]
+        options.compilerArgs += ["--enable-preview",
+                                 "--add-exports=java.base/jdk.internal.ref=ALL-UNNAMED",
+                                 "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
+                                 "--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED",
+                                 "--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED",
+                                 "--add-exports=java.base/java.lang.reflect=ALL-UNNAMED"]
     }
 
-    tasks.withType(JavaCompile).each {
-        it.options.compilerArgs.add('--enable-preview')
-    }
-    
-    test {
-        testLogging {
-            events "failed"
-            exceptionFormat "short"
-        }
+    def applyLicenseHeader = project.hasProperty('applyLicenseHeader') ? project.applyLicenseHeader.toBoolean() : true
+    def spotlessFiles = project.hasProperty('spotlessFiles') ? project.spotlessFiles.split(",") : []
 
-        useJUnitPlatform()
-    }
 
     spotless {
         enforceCheck false
         java {
-            licenseHeaderFile "${rootDir}/LICENSE"
+
+            def javaFiles = spotlessFiles.findAll { it.endsWith('.java') }
+            if (javaFiles) {
+                def relativeJavaFiles = javaFiles.collect { file ->
+                    file.toString().replace(project.projectDir.toString() + File.separator, '').replace('\\', '/')
+                }
+
+                println "Targeting Java files for formatting: ${relativeJavaFiles}"
+                target(relativeJavaFiles)
+            } else {
+                println "No specific Java files provided. No files will be targeted for Java formatting."
+                target([])
+            }
+            eclipse().configFile "${rootDir}/eclipse/sirix-formatter.xml"
+//            removeUnusedImports()
+            if (applyLicenseHeader) {
+                licenseHeaderFile "${rootDir}/LICENSE"
+            }
+        }
+
+        kotlin {
+            def kotlinFiles = spotlessFiles.findAll { it.endsWith('.kt') }
+            if (kotlinFiles) {
+                def relativeKotlinFiles = kotlinFiles.collect { file ->
+                    file.toString().replace(project.projectDir.toString() + File.separator, '').replace('\\', '/')
+                }
+                println "Targeting Kotlin files for formatting: ${relativeKotlinFiles}"
+                target(relativeKotlinFiles)
+            } else {
+                println "No specific Kotlin files provided. No files will be targeted for Kotlin formatting."
+                target([])
+            }
+            ktfmt().kotlinlangStyle()
         }
     }
 
-    jacocoTestReport {
-        reports {
-            xml.enabled = true
-            html.enabled = true
-        }
-    }
+//    jacoco {
+//        toolVersion = "0.8.7"
+//    }
+//
+//    jacocoTestReport {
+//        reports {
+//            xml.enabled = true
+//            html.enabled = true
+//        }
+//    }
 
     publishing {
         publications {
@@ -185,11 +236,16 @@ subprojects {
 
     ext.isReleaseVersion = !rootProject.getProperties().version.endsWith('SNAPSHOT')
 
-    tasks.withType(Sign) {
-        onlyIf { isReleaseVersion }
+    tasks.withType(Sign).tap {
+        configureEach {
+            onlyIf { isReleaseVersion }
+        }
     }
 
     signing {
+        //def signingKey = System.getenv("OSSRH_GPG_SECRET_KEY")
+        //def signingPassword = System.getenv("OSSRH_GPG_SECRET_KEY_PASSWORD")
+        //useInMemoryPgpKeys(signingKey, signingPassword)
         required { isReleaseVersion }
         sign publishing.publications.maven
     }
@@ -216,35 +272,76 @@ subprojects {
 
     publishing.publications.maven.artifact(testsJar)
 
-    tasks.withType(JavaCompile) {
-        options.encoding = 'UTF-8'
+    tasks.withType(JavaCompile).tap {
+        configureEach {
+            options.encoding = 'UTF-8'
+        }
     }
 
     test {
+        testLogging {
+            events "failed"
+            exceptionFormat "short"
+        }
         useTestNG()
         useJUnit()
-        jvmArgs(["--enable-preview", "--add-modules=jdk.incubator.foreign"])
+        jvmArgs(["--enable-preview",
+                 "--add-exports=java.base/jdk.internal.ref=ALL-UNNAMED",
+                 "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
+                 "--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED",
+                 "--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED",
+                 "--add-opens=jdk.compiler/com.sun.tools.javac=ALL-UNNAMED",
+                 "--add-opens=java.base/java.lang=ALL-UNNAMED",
+                 "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
+                 "--add-opens=java.base/java.io=ALL-UNNAMED",
+                 "--add-opens=java.base/java.util=ALL-UNNAMED",
+                 "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
+                 "-XX:+UnlockDiagnosticVMOptions",
+                 "-XX:+DebugNonSafepoints",
+                 //"-XX:+UseShenandoahGC",
+            //     "-Xlog:gc*=debug:file=g1.log",
+//                 "-XX:+UseZGC",
+//                 "-XX:+ZGenerational",
+             //    "-verbose:gc",
+                 "-XX:+HeapDumpOnOutOfMemoryError",
+                 //"-XX:HeapDumpPath=heapdump.hprof",
+                 "-XX:+UseStringDeduplication",
+                 //"-XX:MaxMetaspaceSize=3g",
+                 //"-XX:InitiatingHeapOccupancyPercent=20",
+                 //"-XX:MaxGCPauseMillis=60",
+                 "-XX:MaxDirectMemorySize=1g",
+                 "-XX:+UnlockExperimentalVMOptions",
+                 "-XX:+AlwaysPreTouch",
+                 "-XX:+UseLargePages",
+                 "-XX:ReservedCodeCacheSize=1000m",
+                 "-XX:+UnlockDiagnosticVMOptions",
+               //  "-XX:+PrintInlining",
+                 "-XX:EliminateAllocationArraySizeLimit=1024",
+                 "-Ddisable.single.threaded.check=true"
+                /* "-XX:MaxInlineSize=500" */])
 
-        minHeapSize = '2g'
-        maxHeapSize = '7g'
+        minHeapSize = '5g'
+        maxHeapSize = '8g'
     }
 }
 
-task jacocoRootReport(type: JacocoReport) {
-    description = 'Generates an aggregate report from all subprojects'
-    dependsOn = subprojects.test
-    sourceDirectories.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
-    classDirectories.setFrom files(subprojects.sourceSets.main.output)
-    executionData.setFrom files(subprojects.jacocoTestReport.executionData).filter {
-        file -> file.exists()
-    }.asList()
-    reports {
-        html.enabled = true
-        xml.enabled = true
-    }
-}
 
-coveralls {
-    sourceDirs = subprojects.sourceSets.main.allSource.srcDirs.flatten()
-    jacocoReportPath = "${buildDir}/reports/jacoco/jacocoRootReport/jacocoRootReport.xml"
-}
+apply from: "$rootDir/gradle/preCommit.gradle"
+//task jacocoRootReport(type: JacocoReport) {
+//    description = 'Generates an aggregate report from all subprojects'
+//    dependsOn = subprojects.test
+//    sourceDirectories.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
+//    classDirectories.setFrom files(subprojects.sourceSets.main.output)
+//    executionData.setFrom files(subprojects.jacocoTestReport.executionData).filter {
+//        file -> file.exists()
+//    }.asList()
+//    reports {
+//        html.enabled = true
+//        xml.enabled = true
+//    }
+//}
+//
+//coveralls {
+//    sourceDirs = subprojects.sourceSets.main.allSource.srcDirs.flatten()
+//    jacocoReportPath = "${buildDir}/reports/jacoco/jacocoRootReport/jacocoRootReport.xml"
+//}
